@@ -1,0 +1,148 @@
+#!/usr/bin/python
+
+# Subversion Configuration System Manager
+
+#### IMPORTS
+from optparse import OptionParser, OptionGroup
+import subprocess
+import os
+import sys
+import shutil
+import re
+import pysvn
+import ConfigParser
+
+def main():
+	#### HELP TEXT FOR ACTIONS
+	usage = '''Usage: %prog [options] ACTION [...]
+
+	Package-related actions:
+	  pkg-create    NAME         Create a package
+	  pkg-delete    NAME         Deletes a package
+
+	Channel-related actions:
+	  chan-create   NAME         Create a channel
+	  chan-delete   NAME         Deletes a channel
+	  
+	Other actions:
+	  tag           CHANNEL PACKAGE
+		            Adds the specified package name to the channel
+	  untag         CHANNEL PACKAGE
+		            Removes the specified package name from the channel'''
+
+	#### COMMAND LINE PARSER
+	parser = OptionParser(usage=usage,version='%prog version 1')
+	parser.add_option('-c','--config-file',dest='config',default="/etc/scsm.conf",help='Set the configuration file to use')
+	group = OptionGroup(parser,"Options for 'pkg-create'")
+	group.add_option('-s','--step-free',action='store_true',dest='stepfree',default=False,help='Create a non-transactional package')
+	parser.add_option_group(group)
+	group = OptionGroup(parser,"Options for 'tag'")
+	group.add_option('-r','--revision',dest='revision',help='Specify a specific revision of the package to tag')
+	parser.add_option_group(group)
+	(options, args) = parser.parse_args()
+
+	#### ROOT DIR
+	svnroot = '/opt/scsm/svn/'
+	tmpdir = '/opt/scsm/tmp/'
+
+	#### LOAD CONFIG
+	config = ConfigParser.RawConfigParser()
+	config.read(options.config)
+
+	if config.has_option('main','svn root'):
+		tmp = config.get('main','svn root')
+		if os.path.isdir(tmp):
+			svnroot = tmp
+		else:
+			print >> sys.stderr, 'The subversion root specified in ' + options.config + ' is not a directory'
+			sys.exit(1)
+
+	if config.has_option('main','tmp dir'):
+		tmp = config.get('main','tmp dir')
+		if os.path.isdir(tmp):
+			tmpdir = tmp
+		else:
+			print >> sys.stderr, 'The tmp directory specified in ' + options.config + ' is not a directory'
+			sys.exit(1)
+
+	#### PROCESS "ACTION"
+	if len(args) != 2:
+		parser.print_help()
+	else:
+		action = args[0]
+		name = args[1]
+	
+		if action == 'pkg-create':
+			path = os.path.join(svnroot,'p_' + name)
+			svn_create(path,name,'package')
+
+			checkout = os.path.join(tmpdir,'tmp_p_' + name)
+			client = pysvn.Client()
+			client.checkout('file:///' + path, checkout)
+
+			try:
+				os.mkdir(os.path.join(checkout,'scripts'))
+				os.mkdir(os.path.join(checkout,'.scs'))
+				os.mkdir(os.path.join(checkout,'data'))
+				open(os.path.join(checkout,'scripts','init'),'w')
+				open(os.path.join(checkout,'scripts','uninit'),'w')
+				open(os.path.join(checkout,'scripts','preup'),'w')
+				open(os.path.join(checkout,'scripts','postup'),'w')
+				open(os.path.join(checkout,'scripts','preinst'),'w')
+				open(os.path.join(checkout,'scripts','postinst'),'w')
+				open(os.path.join(checkout,'scripts','preinc'),'w')
+				#open(os.path.join(checkout,'.scs','stepfree'),'w')
+			except (OSError, IOError):
+				## TODO FIX THIS!?
+				print 'blah'
+			else:
+				client.add(os.path.join(checkout,'scripts'),recurse=True)
+				client.add(os.path.join(checkout,'.scs'),recurse=True)
+				client.add(os.path.join(checkout,'data'),recurse=True)
+				revision = client.checkin(checkout,"Package creation",recurse=True)
+
+			## Cleanup
+			#shutil.rmtree(checkout)
+
+		elif action == 'pkg-delete':
+			svn_delete(os.path.join(svnroot,'p_' + name),'package')
+
+		elif action == 'chan-create':
+			svn_create(os.path.join(svnroot,'c_' + name),name,'channel')
+
+		elif action == 'chan-delete':
+			svn_delete(os.path.join(svnroot,'c_' + name),'channel')
+
+		else:
+			parser.print_help()
+
+def svn_create(path,name,svntype):
+	## Validate the name
+	regex = re.compile('^[a-zA-Z\_\-0-9]+$')
+	matched = regex.match(name)
+	if not matched:
+		print 'Invalid name! Name must only contain a-z, 0-9 or the characters _ and -'
+		sys.exit(1)
+
+	## Check dir doesnt already exist
+	if os.path.exists(path):
+		print >> sys.stderr, 'That ' + svntype + ' already exists!'
+		sys.exit(1)
+
+	svnadmin = subprocess.Popen(['svnadmin', 'create', path],stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+	(stdoutdata, stderrdata) = svnadmin.communicate()
+
+	## Handle errors
+	if svnadmin.returncode > 0:
+		print stdoutdata
+		sys.exit(1)
+
+def svn_delete(path,svntype):
+	if os.path.exists(path):
+		shutil.rmtree(path)
+	else:
+		print >> sys.stderr, 'That ' + svntype + ' does not exist!'
+		sys.exit(1)
+
+if __name__ == "__main__":
+    main()

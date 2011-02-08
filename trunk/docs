@@ -1,0 +1,73 @@
+How to list channels and pkgs?
+
+on client
+
+scs list						List all (installed and on server)
+scs verify <name>				Verify a package status
+scs verify-all					Verify all packages
+scs files <name>				List files as part of package
+scs files-all					List all managed files
+scs init <path>					Install a package
+scs uninit <path>				Remove a package
+scs channels 					List channels
+scs subscribe <channel>			Subscribe
+scs unsubscribe <channel>		Unsubscribe
+
+-csv Results in csv format
+-xml Results in XML format
+
+meta
+	type
+scripts
+	init				Script to run on init
+	uninit				Script to run on uninit
+	preup				Script to run before an upgrade
+	postup				Script to run after an upgrade
+	preinst				Script to run before inst.
+	postinst			Script to run after inst.
+	preinc				Script to run just before package is incremented
+data
+	...
+
+on init:
+	init.
+	preinst.
+	postinst.
+
+on uninit:
+	uninit
+
+on upgrade:
+		preinc (called in old package)
+		preup (current package)
+	preinst
+	postinst.
+		postup (new package)
+
+/opt/rcfg/pkg
+         /channel
+         /db
+
+init:
+	a 1
+	b 2
+	c 1
+	d 5
+	e 1
+ 
+
+a1 a
+b1 ab
+c1 abc
+d1 abcd
+e1 abcde
+d2 abced    
+b2 acedb
+
+
+
+d 6
+e 1
+
+history:
+	
