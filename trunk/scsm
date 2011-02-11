@@ -12,73 +12,87 @@ import re
 import pysvn
 import ConfigParser
 
+## TODO lock!
+
 def main():
 	#### HELP TEXT FOR ACTIONS
 	usage = '''Usage: %prog [options] ACTION [...]
 
-	Package-related actions:
-	  pkg-create    NAME         Create a package
-	  pkg-delete    NAME         Deletes a package
+    Package-related actions:
+        pkg-create    NAME         Create a package
+        pkg-delete    NAME         Deletes a package
 
-	Channel-related actions:
-	  chan-create   NAME         Create a channel
-	  chan-delete   NAME         Deletes a channel
+    Channel-related actions:
+        chan-create   NAME         Create a channel
+        chan-delete   NAME         Deletes a channel
 	  
-	Other actions:
-	  tag           CHANNEL PACKAGE
-		            Adds the specified package name to the channel
-	  untag         CHANNEL PACKAGE
-		            Removes the specified package name from the channel'''
+    Other actions:
+        tag           CHANNEL PACKAGE
+                      Adds the specified package name to the channel
+        untag         CHANNEL PACKAGE
+                      Removes the specified package name from the channel  
+        priority      CHANNEL PACKAGE PRIORITY
+                      Sets the installation order PRIORITY on PACKAGE in CHANNEL'''
+
+## TODO priority
 
 	#### COMMAND LINE PARSER
-	parser = OptionParser(usage=usage,version='%prog version 1')
-	parser.add_option('-c','--config-file',dest='config',default="/etc/scsm.conf",help='Set the configuration file to use')
+	parser = OptionParser(usage=usage,version='%prog version 2')
+	parser.add_option('-c','--config-file',dest='config',default="/etc/scs.conf",help='Set the configuration file to use')
 	group = OptionGroup(parser,"Options for 'pkg-create'")
 	group.add_option('-s','--step-free',action='store_true',dest='stepfree',default=False,help='Create a non-transactional package')
 	parser.add_option_group(group)
 	group = OptionGroup(parser,"Options for 'tag'")
-	group.add_option('-r','--revision',dest='revision',help='Specify a specific revision of the package to tag')
+	group.add_option('-r','--revision',type="int",default=-1,dest='revision',help='Specify a specific revision of the package to tag')
+	group.add_option('-o','--install-order',type="int",default=-1,dest='instorder',help='Set a installation priority to let scs known what order to install packages')
 	parser.add_option_group(group)
 	(options, args) = parser.parse_args()
 
 	#### ROOT DIR
-	svnroot = '/opt/scsm/svn/'
-	tmpdir = '/opt/scsm/tmp/'
+	svnroot  = '/opt/scsm/svn/'
+	scsmroot = '/opt/scsm/scsm/'
+
+	#### LOAD SVN
+	svnclient = pysvn.Client()
 
 	#### LOAD CONFIG
 	config = ConfigParser.RawConfigParser()
 	config.read(options.config)
 
-	if config.has_option('main','svn root'):
-		tmp = config.get('main','svn root')
-		if os.path.isdir(tmp):
-			svnroot = tmp
+	if config.has_option('server','svn root'):
+		configValue = config.get('server','svn root')
+		if os.path.isdir(configValue):
+			svnroot = configValue
 		else:
 			print >> sys.stderr, 'The subversion root specified in ' + options.config + ' is not a directory'
 			sys.exit(1)
 
-	if config.has_option('main','tmp dir'):
-		tmp = config.get('main','tmp dir')
-		if os.path.isdir(tmp):
-			tmpdir = tmp
+	if config.has_option('server','scsm root'):
+		configValue = config.get('server','scsm root')
+		if os.path.isdir(configValue):
+			scsmroot = configValue
 		else:
-			print >> sys.stderr, 'The tmp directory specified in ' + options.config + ' is not a directory'
+			print >> sys.stderr, 'The scsm root specified in ' + options.config + ' is not a directory'
 			sys.exit(1)
 
+	## Build other paths
+	pkgcodir  = os.path.join(scsmroot,'packages')
+	chancodir = os.path.join(scsmroot,'channels')
+
 	#### PROCESS "ACTION"
-	if len(args) != 2:
+	if len(args) < 2:
 		parser.print_help()
-	else:
+	elif len(args) == 2:
 		action = args[0]
 		name = args[1]
 	
+		#### PACKAGE CREATE ####################################################
 		if action == 'pkg-create':
-			path = os.path.join(svnroot,'p_' + name)
-			svn_create(path,name,'package')
+			svnpath = os.path.join(svnroot,'p_' + name)
+			svn_create(svnpath,name,'package')
 
-			checkout = os.path.join(tmpdir,'tmp_p_' + name)
-			client = pysvn.Client()
-			client.checkout('file:///' + path, checkout)
+			checkout = os.path.join(pkgcodir,'p_' + name)
+			client.checkout('file://' + svnpath, checkout)
 
 			try:
 				os.mkdir(os.path.join(checkout,'scripts'))
@@ -92,26 +106,173 @@ def main():
 				open(os.path.join(checkout,'scripts','postinst'),'w')
 				open(os.path.join(checkout,'scripts','preinc'),'w')
 				#open(os.path.join(checkout,'.scs','stepfree'),'w')
-			except (OSError, IOError):
-				## TODO FIX THIS!?
-				print 'blah'
+			except (OSError, IOError) as error:
+				print 'Failed to create base components of package. Error was: ' + error.strerror + ' on ' + error.filename
 			else:
 				client.add(os.path.join(checkout,'scripts'),recurse=True)
 				client.add(os.path.join(checkout,'.scs'),recurse=True)
 				client.add(os.path.join(checkout,'data'),recurse=True)
 				revision = client.checkin(checkout,"Package creation",recurse=True)
 
-			## Cleanup
-			#shutil.rmtree(checkout)
+			## Cleanup in all cases
+			shutil.rmtree(checkout)
 
+		#### PACKAGE DELETE ####################################################
 		elif action == 'pkg-delete':
 			svn_delete(os.path.join(svnroot,'p_' + name),'package')
 
+		#### CHANNEL CREATE ####################################################
 		elif action == 'chan-create':
-			svn_create(os.path.join(svnroot,'c_' + name),name,'channel')
 
+			## Workout the SVN root should be
+			svnpath = os.path.join(svnroot,'c_' + name)
+
+			## Create it there
+			svn_create(svnpath,name,'channel')
+
+			## Checkout
+			codir = os.path.join(chancodir,'c_' + name)
+			svnclient.checkout('file://' + svnpath, codir)
+
+			## Create packages dir
+			try:
+				os.mkdir(os.path.join(codir,'packages'))
+			except (OSError, IOError) as error:
+				print 'Failed to create base components of channel. Error was: ' + error.strerror + ' on ' + error.filename
+			else:
+				svnclient.add(os.path.join(codir,'packages'))
+				revision = svnclient.checkin(codir,"Channel creation",recurse=True)
+
+		#### CHANNEL DELETE ####################################################
 		elif action == 'chan-delete':
 			svn_delete(os.path.join(svnroot,'c_' + name),'channel')
+			shutil.rmtree(os.path.join(chancodir,'c_' + name))
+
+		else:
+			parser.print_help()
+
+	elif len(args) == 3:
+		action      = args[0]
+		channelName = args[1]
+		packageName = args[2]
+
+		#### CHANNEL TAG #######################################################
+
+		if action == 'tag':
+			## TODO does the package exist?
+			## TODO does the channel exist?
+
+			## Setup variables
+			pkgSvnPath      = os.path.join(svnroot,'p_' + packageName)
+			pkgCheckout     = os.path.join(pkgcodir,'p_' + packageName)
+			channelCheckout = os.path.join(chancodir,'c_' + channelName)
+			pkgConfigFile   = os.path.join(channelCheckout,'packages',packageName)
+			pkgUpgradeFile  = os.path.join(channelCheckout,'upgrade')
+
+			## Make sure channel is up-to-date
+			svnclient.update(os.path.join(chancodir,'c_' + channelName))
+
+			## Checkout the package into a temporary directory
+			infoList = svnclient.info2('file://' + pkgSvnPath + '/',recurse=False,revision=pysvn.Revision(pysvn.opt_revision_kind.head))
+			currentPackageRevision = infoList[0][1].rev.number
+
+			## Was there a specific revision to use?
+			if options.revision >= 0:
+				if options.revision >= currentPackageRevision:
+					print 'Invalid package revision'
+					sys.exit(0)
+				else:
+					taggedRevision = options.revision
+			else:
+				taggedRevision = currentPackageRevision
+
+			## make sure the new revision is higher than the current revision, if any
+			if os.path.isfile(pkgConfigFile):
+				currentRev = svnclient.propget('revision',pkgConfigFile)
+				currentRev = currentRev[pkgConfigFile]
+
+				if int(currentRev) == int(taggedRevision):
+					print 'The package is already tagged to that revision'
+					sys.exit(0)
+				elif int(currentRev) > int(taggedRevision):
+					print 'The package is already tagged to a more recent revision'
+					sys.exit(0)
+
+			## Touch the package name in packages/ in the channel
+			try:
+				### Remove all previous properties on the upgrade file if it exists
+				if os.path.isfile(pkgUpgradeFile):
+					svnclient.propdel('name',pkgUpgradeFile)
+					svnclient.propdel('revision',pkgUpgradeFile)
+					svnclient.propdel('action',pkgUpgradeFile)
+				else:
+					#### Add the upgrade file cos it hasn't been used yet
+					open(pkgUpgradeFile,'w')
+					svnclient.add(pkgUpgradeFile)
+
+				## Touch channel/packages/packageName
+				if not os.path.isfile(pkgConfigFile):
+					open(pkgConfigFile,'w')
+					svnclient.add(pkgConfigFile)
+
+				## Set name and revision on "add" (for upgrades)
+				svnclient.propset('name',packageName,pkgUpgradeFile)
+				svnclient.propset('revision',str(taggedRevision),pkgUpgradeFile)
+				svnclient.propset('action','install',pkgUpgradeFile)
+
+				## Set revision on the config file (for new installs)
+				svnclient.propset('revision',str(taggedRevision),pkgConfigFile)
+
+				## Set an install order if requested
+				if options.instorder >= 0:
+					svnclient.propset('order',str(options.instorder),pkgConfigFile)
+
+				## Checkin
+				revision = svnclient.checkin(channelCheckout,"Added version " + str(taggedRevision) + ' of ' + packageName + ' into channel ' + channelName,recurse=True)
+			
+			except (OSError, IOError) as error:
+				print 'Failed to tag package into channel. Error was: ' + error.strerror + ' on ' + error.filename
+			except pysvn.ClientError as error:
+				print 'Subversion operation failed: ' + str(error)
+
+		#### CHANNEL UNTAG #####################################################
+
+		elif action == 'untag':
+			## Setup variables
+			channelCheckout = os.path.join(chancodir,'c_' + channelName)
+			pkgConfigFile   = os.path.join(channelCheckout,'packages',packageName)
+			pkgUpgradeFile  = os.path.join(channelCheckout,'upgrade')
+
+			## Make sure channel is up-to-date
+			svnclient.update(os.path.join(chancodir,'c_' + channelName))
+
+			try:
+				### Remove all previous properties on the upgrade file if it exists
+				if os.path.isfile(pkgUpgradeFile):
+					svnclient.propdel('name',pkgUpgradeFile)
+					svnclient.propdel('revision',pkgUpgradeFile)
+					svnclient.propdel('action',pkgUpgradeFile)
+				else:
+					#### Add the upgrade file cos it hasn't been used yet
+					open(pkgUpgradeFile,'w')
+					svnclient.add(pkgUpgradeFile)
+
+				## Delete channel/packages/packageName
+				if not os.path.isfile(pkgConfigFile):
+					os.unlink(pkgConfigFile)
+					svnclient.remove(pkgConfigFile)
+
+				## Set the upgrade properties to remove the package
+				svnclient.propset('name',packageName,pkgUpgradeFile)
+				svnclient.propset('action','remove',pkgUpgradeFile)
+
+				## Checkin
+				revision = svnclient.checkin(channelCheckout,"Removed " + packageName + ' from channel ' + channelName,recurse=True)
+			
+			except (OSError, IOError) as error:
+				print 'Failed to untag package from channel. Error was: ' + error.strerror + ' on ' + error.filename
+			except pysvn.ClientError as error:
+				print 'Subversion operation failed: ' + str(error)
 
 		else:
 			parser.print_help()
