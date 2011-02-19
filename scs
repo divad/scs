@@ -1,0 +1,468 @@
+#!/usr/bin/python
+
+import os
+import stat
+import json
+import sys
+import urllib
+import pysvn
+import subprocess
+import shutil
+import pwd
+import grp
+import hashlib
+from optparse import OptionParser, OptionGroup
+
+#### TODO TODO TODO TODO
+# TODO - use config file and load server details
+# TODO - different output formats (csv? xml? json?)
+
+def shasum(filePath,blocksize=2**20):
+	sha = hashlib.sha256()
+	f = open(filePath,'rb')
+	while True:
+		data = f.read(blocksize)
+		if not data:
+			break;
+		sha.update(data)
+	return sha.hexdigest()
+
+def runScript(pkgName,scriptName):
+	## TODO use config file path
+
+	print 'SCS: Executing ' + scriptName + ' on package ' + pkgName
+
+	scriptPath = '/opt/scs/packages/' + pkgName + '/scripts/' + scriptName
+
+	## CHMOD First
+	os.chmod(scriptPath,stat.S_IRWXU)
+
+	if os.path.getsize(scriptPath) == 0:
+		print "SCS: Script is empty; not executing"
+		return None
+
+	## Now run the script
+	try:
+		script = subprocess.Popen([scriptPath],stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+		(stdoutdata, stderrdata) = script.communicate()
+		return (script.returncode, stdoutdata, stderrdata)
+	except OSError as e:
+		## TODO how to cope with an error?
+		print str(e)
+			
+
+def fetchMetadata():
+	#print 'Fetching metadata...'
+	try:
+		f = urllib.urlopen('http://localhost/server.meta')
+		jsonData = f.read()
+		f.close()
+	except IOError as e:
+		print 'Unable to read from ' + e.filename + ': ' + e.strerror
+		sys.exit(1)
+
+	try:
+		metadict = json.loads(jsonData)
+	except (TypeError,ValueError) as e:
+		print 'Unable to understand server metadata: ' + str(e)
+		sys.exit(2)
+
+	return metadict
+
+def processPackage(pkg):
+	if type(pkg).__name__=='dict':
+		if pkg.has_key('name') and pkg.has_key('revision') and pkg.has_key('desc'):
+			print str(pkg['name']) + '-' + str(pkg['revision']) + "\t\t" + str(pkg['desc'])
+		elif pkg.has_key('name') and pkg.has_key('revision'):
+			print str(pkg['name']) + '-' + str(pkg['revision'])
+		else:
+			print 'fail2'
+	else:
+		print 'uh oh - that was not a dict!'
+
+def processPackageFromJson(jsonData):
+	try:
+		pkg = json.loads(jsonData)
+	except (TypeError,ValueError) as e:
+		print 'Unable to understand data: ' + str(e)
+	else:
+		processPackage(pkg)
+
+def processPackagesFromJson(jsonData):
+	try:
+		pkgs = json.loads(jsonData)
+	except (TypeError,ValueError) as e:
+		print 'Unable to understand data: ' + str(e)
+
+	if type(pkgs).__name__=='list':
+		for pkg in pkgs:
+			processPackage(pkg)
+	else:
+		print 'uh oh - that was not a list!'
+
+def main():
+	#### HELP TEXT FOR ACTIONS
+	usage = '''Usage: %prog [options] ACTION [...]
+
+    Update functions:
+
+        check                      List available updates from channels
+        update                     Apply all updates from all channels
+        update        CHANNEL      Apply updates from a channel
+        upgrade       PACKAGE      Upgrade a specific package (Not recommended)
+
+    Basic package functions:
+
+        installed                  List installed packages
+        packages                   List all available packages
+        init          PACKAGE      Install a package
+        uninit        PACKAGE      Remove a package
+
+    Package maintenance functions: 
+
+        verify        PACKAGE      Verify system conforms to package spec
+        verify-all                 Verify system conforms to all package specs
+		files         PACKAGE      List files which are part of PACKAGE
+        files-all                  List files from all packages
+        owner         FILEPATH     Determine if FILEPATH is owned by a package
+
+    Channel-related actions:
+        subscribed                 List channels this system is subscribed to
+        channels                   List all available channels 
+        subscribe     CHANNEL      Subscribe to a channel
+        unsubscribe   CHANNEL      Unsubscribe from a channel'''
+
+	#### COMMAND LINE PARSER
+	parser = OptionParser(usage=usage,version='%prog version 2')
+	parser.add_option('-c','--config-file',dest='config',default="/etc/scs.conf",help='Set the configuration file to use')
+	parser.add_option('-f','--force',dest='ignore',default=False,action="store_true",help='Ignore local changes and proceed anyway')
+	group = OptionGroup(parser,"Options for 'init'")
+	group.add_option('-r','--revision',type="int",default=-1,dest='revision',help='Specify a specific revision of the package to tag')
+	parser.add_option_group(group)
+	(options, args) = parser.parse_args()
+
+	if len(args) < 1:
+		parser.print_help()
+	else:
+		action = args[0]
+		svnclient = pysvn.Client()
+
+		if action == 'installed':
+			pkgs = os.listdir('/opt/scs/packages/')
+
+			for pkg in pkgs:
+				try:
+					f = open('/opt/scs/packages/' + pkg + '/conf/metadata.json', 'r')
+					jsonData = f.read()
+					f.close()
+				except IOError as e:
+					print 'Unable to read from ' + e.filename + ': ' + e.strerror
+					sys.exit(1)
+
+				processPackageFromJson(jsonData)
+
+			#processPackagesFromJson(jsonData)
+
+			## TODO reformat output?
+
+		elif action == 'packages':
+			metadict = fetchMetadata()
+
+			for pkgName in metadict['packages']:
+				pkg = metadict['packages'][pkgName]
+				if pkg.has_key('name'):
+					print str(pkg['name'])
+
+			## TODO reformat output?
+
+		elif action == 'verify':
+			print 'todo'
+
+			## list /opt/scs/meta/packages/<name>/files.json and md5 check
+
+		elif action == 'verify-all':
+			print 'todo'
+
+		elif action == 'files':
+			print 'todo'
+
+			## list /opt/scs/meta/packages/<name>/files.json
+
+		elif action == 'files-all':
+			print 'todo'
+
+################################################################################
+		elif action == 'init' and len(args) == 2:
+			os.chdir('/tmp')
+			pkg = args[1]
+
+			## Get metadata from server
+			metadict = fetchMetadata()
+
+			## See if the package requested actually exists
+			found = False
+			for pkgName in metadict['packages']:
+				if pkgName == pkg:
+					found = True
+
+			## Catch errors
+			if not found:
+				print 'No such package'
+				sys.exit(1)
+
+			## TODO paths from config
+			remotePath   = 'file:///home/drb/scsm/svn/p_' + pkg + '/'
+			localPath    = '/opt/scs/packages/' + pkg + '/'
+			localScripts = localPath + 'scripts'
+			localData    = localPath + 'data'
+			
+			## Get latest remote revision
+			infoList = svnclient.info2(remotePath,recurse=False)
+			for infoTuple in infoList:
+				infoDict = infoTuple[1]
+				latestRevision = infoDict['rev'].number
+
+			## Get local revision installed
+			infoList = svnclient.info2(localData,recurse=False)
+			for infoTuple in infoList:
+				infoDict = infoTuple[1]
+				localRevision = infoDict['rev'].number
+
+			if localRevision == latestRevision:
+				print 'SCS: Already up to date'
+				revisionToUse = pysvn.Revision(pysvn.opt_revision_kind.head)
+				#return 1
+			else:
+				revisionToUse = pysvn.Revision(pysvn.opt_revision_kind.number, int(localRevision) + 1)
+
+			## TODO get revprop to see if we should skip or not
+
+			## What type, init or upgrade?
+			upgrade = False
+
+			## If this is an upgrade
+			if os.path.exists(localPath):
+				upgrade = True
+				print 'SCS: Upgrading ' + pkg
+
+				## "check" property
+				### before increment it checks all files with "check" property
+				#### check value can be:
+				#### - fail - Fail the entire package upgrade if the local file has changed - DOES NOT OVERWRITE
+				#### - ignore - (default) - Do nothing - don't care - OVERWITES LOCAL CHANGES
+				#### - warn - Warn the file has changed - OVERWRITES LOCAL CHANGES
+				#### - skip - don't change /that/ file, and that file alone, on the next increment - DOES NOT OVERWRITE
+
+				ignore = options.ignore
+
+				if not ignore:
+					print 'SCS: Checking for local changes'					
+
+					propList = svnclient.proplist(localData,recurse=True)
+
+					for propSet in propList:
+						source     = propSet[0]
+						properties = propSet[1]
+
+						if 'dest' in properties:
+							dest = properties['dest']
+
+							## do a sum now
+							### TODO exception handling
+							sourceh = shasum(source)
+							desth   = shasum(dest)
+
+							if not sourceh == desth:
+								## TODO make the default come from a revprop?
+								checkAction = 'ignore'
+								if 'check' in properties:
+									checkAction = properties['check']
+
+								if action == 'fail':
+									return 0
+								elif action == 'warn': 
+									print "SCS: Local changes found to file " + dest
+									# TODO write to stderr too
+								elif action == 'skip': 
+									## TODO add the file to the "ignore" list
+									print 'skip'
+
+				## Pre-increment ("pre-upgrade") script
+				runScript(pkg,'preinc')
+				
+			else:
+				print 'SCS: Installing ' + pkg
+
+				## set up directory layout
+				try:
+					os.mkdir(localPath)
+					os.mkdir(localPath + 'conf/')
+					os.mkdir(localPath + 'scripts/')
+					os.mkdir(localPath + 'data/')
+				except (OSError, IOError) as error:
+					print 'Failed to init package. Error was: ' + error.strerror + ' on ' + error.filename
+					sys.exit(0)
+
+			## TODO select the RIGHT REVISION
+			
+			print 'SCS: Deploying scripts'
+			svnclient.export(remotePath + 'scripts',localScripts,revision=revisionToUse,force=True,recurse=True)
+
+			## If initial init, use "checkout", if not, use "update"
+			if upgrade:
+				print 'SCS: Updating package data'
+				svnclient.update(localData,revision=revisionToUse)
+			else:
+				print 'SCS: Deploying package data'
+				svnclient.checkout(remotePath + 'data',localData)
+
+			## Run scripts
+			if upgrade:
+				## Pre-upgrade script
+				runScript(pkg,'preup')
+			else:
+				## pre-init script
+				runScript(pkg,'preinit')
+
+			runScript(pkg,'preinst')
+
+			## Get properties
+			propList = svnclient.proplist(localData,recurse=True)
+
+			for propSet in propList:
+				source     = propSet[0]
+				properties = propSet[1]
+
+				## Core properties
+				## dest - file location to copy/link/hardlink to, e.g. /etc/openldap.conf - implies preserve
+
+				## By default, apply properties to where the file is downloaded to via SVN
+				dest = source
+
+				print '----------'
+				print 'source is ' + source
+
+				if 'dest' in properties:
+					dest = properties['dest']
+					action = 'copy'
+
+
+					print 'dest is ' + dest
+
+					if 'action' in properties:
+						action = properties['action']
+
+					print 'mode is ' + action
+
+					chattr = subprocess.Popen(['chattr', '-i', dest],stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+					(stdoutdata, stderrdata) = chattr.communicate()
+					retcode = chattr.returncode
+					## TODO errors ^
+
+					if action == 'copy':
+						## copy the file
+						try:
+							shutil.copyfile(source,dest)
+						except IOError as e:
+							print "Unable to copy from " + source + " to " + dest + ": " + str(e)
+
+					elif action == 'link':
+						try:
+							os.symlink(source,dest)
+						except (IOError, OSError) as e:
+							print "Unable to link " + source + " to " + dest + ": " + str(e)
+
+					elif action == 'linkr':
+						try:
+							if os.path.isdir(dest):
+								shutil.rmtree(dest)
+							elif os.path.isfile(dest):
+								os.unlink(dest)
+							os.symlink(source,dest)
+						except (IOError, OSError) as e:
+							print "Unable to linkr " + source + " to " + dest + ": " + str(e)
+
+					elif action == 'linko':
+						try:
+							if os.path.isfile(dest):
+								os.unlink(dest)
+							os.symlink(source,dest)
+						except (IOError, OSError) as e:
+							print "Unable to linko " + source + " to " + dest + ": " + str(e)
+
+				## chmod - set the permissions to octal mode
+				if 'chmod' in properties:
+					print "\t" + properties['chmod']
+					os.chmod(dest,int(properties['chmod'],8))
+					## TODO exceptions
+
+				## owner - set the owner to
+				if 'owner' in properties:
+					pwd = pwd.getpwnam(properties['owner'])
+					uid = pwd[2]
+					os.chown(dest,uid)
+					## TODO exceptions
+
+				## group - set the group to
+				if 'group' in properties:
+					grp = grp.getgrnam(properties['group'])
+					gid = grp[2]
+					os.chown(dest,-1,gid)
+					## TODO exceptions
+
+				if 'uid' in properties:
+					os.chown(dest,properties['uid'],-1)
+					## TODO exceptions
+
+				## group - set the group to
+				if 'gid' in properties:
+					os.chown(dest,-1,properties['gid'])
+					## TODO exceptions
+
+				## immutable - set the file to immutable after
+				if 'immutable' in properties:
+					## NOTE although python has os.chflags, due to a python configure bug they
+					## are NEVER compiled in - stupid python.
+
+					chattr = subprocess.Popen(['chattr', '+i', dest],stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+					(stdoutdata, stderrdata) = chattr.communicate()
+					retcode = chattr.returncode
+
+					if retcode > 0:
+						print stdoutdata, stderrdata
+
+			runScript(pkg,'postinst')
+
+			if upgrade:
+				## Pre-upgrade script
+				runScript(pkg,'postup')
+			else:
+				## Post init script
+				runScript(pkg,'postinit')
+
+			## TODO output from runScript's...
+			## TODO output from commands?/copies?
+
+			## TODO Update meta??
+				## write name and revision to metadata.json???
+
+		elif action == 'uninit':
+			print 'todo'
+
+		elif action == 'channels':
+			print 'todo'
+
+		elif action == 'subscribed':
+			print 'todo'
+
+		elif action == 'subscribe':
+			print 'todo'
+
+		elif action == 'unsubscribe':
+			print 'todo'
+
+if __name__ == "__main__":
+	#dictionary = {'this': 'that', 'revision': 1}
+	#print json.dumps(dictionary)
+    main()
+

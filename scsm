@@ -1,5 +1,7 @@
 #!/usr/bin/python
 
+## REQUIRES PYTHON 2.6
+
 # Subversion Configuration System Manager
 
 #### IMPORTS
@@ -11,20 +13,25 @@ import shutil
 import re
 import pysvn
 import ConfigParser
-
-## TODO lock!
+import json
+import fcntl
+import time
 
 def main():
+
 	#### HELP TEXT FOR ACTIONS
 	usage = '''Usage: %prog [options] ACTION [...]
 
     Package-related actions:
         pkg-create    NAME         Create a package
         pkg-delete    NAME         Deletes a package
+		pkg-list                   Lists all packages
 
     Channel-related actions:
         chan-create   NAME         Create a channel
         chan-delete   NAME         Deletes a channel
+        chan-list                  Lists all channels
+        chan-info     NAME         Show channel contents
 	  
     Other actions:
         tag           CHANNEL PACKAGE
@@ -34,7 +41,7 @@ def main():
         priority      CHANNEL PACKAGE PRIORITY
                       Sets the installation order PRIORITY on PACKAGE in CHANNEL'''
 
-## TODO priority
+## TODO chan-info
 
 	#### COMMAND LINE PARSER
 	parser = OptionParser(usage=usage,version='%prog version 2')
@@ -48,9 +55,10 @@ def main():
 	parser.add_option_group(group)
 	(options, args) = parser.parse_args()
 
-	#### ROOT DIR
+	#### VARIABLES
 	svnroot  = '/opt/scsm/svn/'
 	scsmroot = '/opt/scsm/scsm/'
+	metadata = '/opt/scsm/www/server.meta'
 
 	#### LOAD SVN
 	svnclient = pysvn.Client()
@@ -67,6 +75,14 @@ def main():
 			print >> sys.stderr, 'The subversion root specified in ' + options.config + ' is not a directory'
 			sys.exit(1)
 
+	if config.has_option('server','metadata file'):
+		configValue = config.get('server','metadata file')
+		if os.path.isfile(configValue):
+			metadata = configValue
+		else:
+			print >> sys.stderr, 'The metadata file specified in ' + options.config + ' is not a file'
+			sys.exit(1)
+
 	if config.has_option('server','scsm root'):
 		configValue = config.get('server','scsm root')
 		if os.path.isdir(configValue):
@@ -79,203 +95,335 @@ def main():
 	pkgcodir  = os.path.join(scsmroot,'packages')
 	chancodir = os.path.join(scsmroot,'channels')
 
-	#### PROCESS "ACTION"
-	if len(args) < 2:
+	if len(args) <= 0:
 		parser.print_help()
-	elif len(args) == 2:
-		action = args[0]
-		name = args[1]
+		sys.exit(0)
+
+	## Shortcut to action
+	action = args[0]
+
+	## Open metadata file, lock it, and read contents
+	try:
+		metafile = open(metadata,'r+')
+		fcntl.flock(metafile,fcntl.LOCK_EX)
+	except (IOError, OSError) as e:
+		print 'Unable to lock ' + str(e.filename) + ': ' + str(e.strerror)
+		sys.exit(1)
+
+	try:
+		jsonData = metafile.read()
+		metafile.seek(0)
+	except (IOError, OSError) as e:
+		print 'Unable to read from ' + e.filename + ': ' + e.strerror
+		sys.exit(1)
+
+	## Handle empty data
+	if len(jsonData) == 0:
+		metadict = {'channels': {}, 'packages': {}}
+	else:
+		## Turn json data into python objects
+		try:
+			metadict = json.loads(jsonData)
+		except (TypeError,ValueError) as e:
+			fcntl.flock(metafile,fcntl.LOCK_UN)
+			print 'Unable to understand metadata: ' + str(e)
+			sys.exit(0)
+
+	#print str(type(metadict))
+	#print str(type(metadict['channels']))
+	#fcntl.flock(metafile,fcntl.LOCK_UN)	
+	#sys.exit(0)
+
 	
-		#### PACKAGE CREATE ####################################################
-		if action == 'pkg-create':
-			svnpath = os.path.join(svnroot,'p_' + name)
-			svn_create(svnpath,name,'package')
 
-			checkout = os.path.join(pkgcodir,'p_' + name)
-			client.checkout('file://' + svnpath, checkout)
+	#### PACKAGE CREATE ####################################################
+	if action == 'pkg-create' and len(args) == 2:
+		name = args[1]
+		svnpath = os.path.join(svnroot,'p_' + name)
 
-			try:
-				os.mkdir(os.path.join(checkout,'scripts'))
-				os.mkdir(os.path.join(checkout,'.scs'))
-				os.mkdir(os.path.join(checkout,'data'))
-				open(os.path.join(checkout,'scripts','init'),'w')
-				open(os.path.join(checkout,'scripts','uninit'),'w')
-				open(os.path.join(checkout,'scripts','preup'),'w')
-				open(os.path.join(checkout,'scripts','postup'),'w')
-				open(os.path.join(checkout,'scripts','preinst'),'w')
-				open(os.path.join(checkout,'scripts','postinst'),'w')
-				open(os.path.join(checkout,'scripts','preinc'),'w')
-				#open(os.path.join(checkout,'.scs','stepfree'),'w')
-			except (OSError, IOError) as error:
-				print 'Failed to create base components of package. Error was: ' + error.strerror + ' on ' + error.filename
-			else:
-				client.add(os.path.join(checkout,'scripts'),recurse=True)
-				client.add(os.path.join(checkout,'.scs'),recurse=True)
-				client.add(os.path.join(checkout,'data'),recurse=True)
-				revision = client.checkin(checkout,"Package creation",recurse=True)
+		## Make sure it does not exist
+		if metadict['packages'].has_key(name):
+			print "Sorry, that package already exists"
+			sys.exit(1)
 
-			## Cleanup in all cases
-			shutil.rmtree(checkout)
+		## Create the SVN
+		svn_create(svnpath,name,'package')
 
-		#### PACKAGE DELETE ####################################################
-		elif action == 'pkg-delete':
+		## Checkout the new SVN
+		checkout = os.path.join(pkgcodir,'p_' + name)
+		svnclient.checkout('file://' + svnpath, checkout)
+
+		## TODO options, like non-transactional
+
+		try:
+			os.mkdir(os.path.join(checkout,'scripts'))
+			os.mkdir(os.path.join(checkout,'.scs'))
+			os.mkdir(os.path.join(checkout,'data'))
+			open(os.path.join(checkout,'scripts','preinit'),'w')
+			open(os.path.join(checkout,'scripts','postinit'),'w')
+			open(os.path.join(checkout,'scripts','uninit'),'w')
+			open(os.path.join(checkout,'scripts','preup'),'w')
+			open(os.path.join(checkout,'scripts','postup'),'w')
+			open(os.path.join(checkout,'scripts','preinst'),'w')
+			open(os.path.join(checkout,'scripts','postinst'),'w')
+			open(os.path.join(checkout,'scripts','preinc'),'w')
+			#open(os.path.join(checkout,'.scs','stepfree'),'w')
+		except (OSError, IOError) as error:
+			print 'Failed to create base components of package. Error was: ' + error.strerror + ' on ' + error.filename
+		else:
+			svnclient.add(os.path.join(checkout,'scripts'),recurse=True)
+			#svnclient.add(os.path.join(checkout,'.scs'),recurse=True)
+			svnclient.add(os.path.join(checkout,'data'),recurse=True)
+			revision = svnclient.checkin(checkout,"Package creation",recurse=True)
+
+			## Record in metadict for lating saving into metafile
+			metadict['packages'][name] = {'name': name}
+
+		## Cleanup in all cases
+		shutil.rmtree(checkout)
+
+	#### PACKAGE DELETE ####################################################
+	elif action == 'pkg-delete' and len(args) == 2:
+		name = args[1]
+
+		## Make sure it exists
+		if not metadict['packages'].has_key(name):
+			print "Sorry, that package does not exist"
+			sys.exit(1)
+		else:
 			svn_delete(os.path.join(svnroot,'p_' + name),'package')
+			del(metadict['packages'][name])
 
-		#### CHANNEL CREATE ####################################################
-		elif action == 'chan-create':
+	#### PACKAGE LIST ######################################################
+	elif action == 'pkg-list':
+		for pkgname in metadict['packages']:
+			pkgdict = metadict['packages'][pkgname]
+			print pkgdict['name']
 
-			## Workout the SVN root should be
-			svnpath = os.path.join(svnroot,'c_' + name)
+	#### CHANNEL CREATE ####################################################
+	elif action == 'chan-create' and len(args) == 2:
+		name = args[1]
 
-			## Create it there
-			svn_create(svnpath,name,'channel')
+		if metadict['channels'].has_key(name):
+			print "Sorry, that channel already exists!"
+			sys.exit(1)
 
-			## Checkout
-			codir = os.path.join(chancodir,'c_' + name)
-			svnclient.checkout('file://' + svnpath, codir)
+		## Workout the SVN root should be
+		svnpath = os.path.join(svnroot,'c_' + name)
 
-			## Create packages dir
-			try:
-				os.mkdir(os.path.join(codir,'packages'))
-			except (OSError, IOError) as error:
-				print 'Failed to create base components of channel. Error was: ' + error.strerror + ' on ' + error.filename
-			else:
-				svnclient.add(os.path.join(codir,'packages'))
-				revision = svnclient.checkin(codir,"Channel creation",recurse=True)
+		## Create it there
+		svn_create(svnpath,name,'channel')
 
-		#### CHANNEL DELETE ####################################################
-		elif action == 'chan-delete':
-			svn_delete(os.path.join(svnroot,'c_' + name),'channel')
-			shutil.rmtree(os.path.join(chancodir,'c_' + name))
+		## Checkout
+		codir = os.path.join(chancodir,'c_' + name)
+		svnclient.checkout('file://' + svnpath, codir)
 
+		## Create packages dir
+		try:
+			os.mkdir(os.path.join(codir,'packages'))
+		except (OSError, IOError) as error:
+			print 'Failed to create base components of channel. Error was: ' + error.strerror + ' on ' + error.filename
 		else:
-			parser.print_help()
+			svnclient.add(os.path.join(codir,'packages'))
+			revision = svnclient.checkin(codir,"Channel creation",recurse=True)
+			metadict['channels'][name] = {'name': name}
 
-	elif len(args) == 3:
-		action      = args[0]
-		channelName = args[1]
-		packageName = args[2]
+	#### CHANNEL DELETE ####################################################
+	elif action == 'chan-delete' and len(args) == 2:
+		name = args[1]
+		svn_delete(os.path.join(svnroot,'c_' + name),'channel')
+		shutil.rmtree(os.path.join(chancodir,'c_' + name))
 
-		#### CHANNEL TAG #######################################################
+	#### CHANNEL LIST ######################################################
+	elif action == 'chan-list':
+		for channame in metadict['channels']:
+			chandict = metadict['channels'][channame]
+			print chandict['name']
 
-		if action == 'tag':
-			## TODO does the package exist?
-			## TODO does the channel exist?
+	#### CHANNEL TAG #######################################################
+	elif action == 'tag' and len(args) == 3:
+		## Setup variables
+		channelName     = args[1]
+		packageName     = args[2]
+		pkgSvnPath      = os.path.join(svnroot,'p_' + packageName)
+		pkgCheckout     = os.path.join(pkgcodir,'p_' + packageName)
+		channelCheckout = os.path.join(chancodir,'c_' + channelName)
+		pkgConfigFile   = os.path.join(channelCheckout,'packages',packageName)
+		pkgUpgradeFile  = os.path.join(channelCheckout,'upgrade')
 
-			## Setup variables
-			pkgSvnPath      = os.path.join(svnroot,'p_' + packageName)
-			pkgCheckout     = os.path.join(pkgcodir,'p_' + packageName)
-			channelCheckout = os.path.join(chancodir,'c_' + channelName)
-			pkgConfigFile   = os.path.join(channelCheckout,'packages',packageName)
-			pkgUpgradeFile  = os.path.join(channelCheckout,'upgrade')
+		if not metadict['channels'].has_key(channelName):
+			print "Sorry, that channel does not exist!"
+			sys.exit(1)
 
-			## Make sure channel is up-to-date
-			svnclient.update(os.path.join(chancodir,'c_' + channelName))
+		if not metadict['packages'].has_key(packageName):
+			print "Sorry, that channel does not exist!"
+			sys.exit(1)
 
-			## Checkout the package into a temporary directory
-			infoList = svnclient.info2('file://' + pkgSvnPath + '/',recurse=False,revision=pysvn.Revision(pysvn.opt_revision_kind.head))
-			currentPackageRevision = infoList[0][1].rev.number
+		## Make sure channel is up-to-date
+		svnclient.update(os.path.join(chancodir,'c_' + channelName))
 
-			## Was there a specific revision to use?
-			if options.revision >= 0:
-				if options.revision >= currentPackageRevision:
-					print 'Invalid package revision'
-					sys.exit(0)
-				else:
-					taggedRevision = options.revision
+		## Checkout the package into a temporary directory
+		infoList = svnclient.info2('file://' + pkgSvnPath + '/',recurse=False,revision=pysvn.Revision(pysvn.opt_revision_kind.head))
+		currentPackageRevision = infoList[0][1].rev.number
+
+		## Was there a specific revision to use?
+		if options.revision >= 0:
+			if options.revision >= currentPackageRevision:
+				print 'Invalid package revision'
+				sys.exit(0)
 			else:
-				taggedRevision = currentPackageRevision
-
-			## make sure the new revision is higher than the current revision, if any
-			if os.path.isfile(pkgConfigFile):
-				currentRev = svnclient.propget('revision',pkgConfigFile)
-				currentRev = currentRev[pkgConfigFile]
-
-				if int(currentRev) == int(taggedRevision):
-					print 'The package is already tagged to that revision'
-					sys.exit(0)
-				elif int(currentRev) > int(taggedRevision):
-					print 'The package is already tagged to a more recent revision'
-					sys.exit(0)
-
-			## Touch the package name in packages/ in the channel
-			try:
-				### Remove all previous properties on the upgrade file if it exists
-				if os.path.isfile(pkgUpgradeFile):
-					svnclient.propdel('name',pkgUpgradeFile)
-					svnclient.propdel('revision',pkgUpgradeFile)
-					svnclient.propdel('action',pkgUpgradeFile)
-				else:
-					#### Add the upgrade file cos it hasn't been used yet
-					open(pkgUpgradeFile,'w')
-					svnclient.add(pkgUpgradeFile)
-
-				## Touch channel/packages/packageName
-				if not os.path.isfile(pkgConfigFile):
-					open(pkgConfigFile,'w')
-					svnclient.add(pkgConfigFile)
-
-				## Set name and revision on "add" (for upgrades)
-				svnclient.propset('name',packageName,pkgUpgradeFile)
-				svnclient.propset('revision',str(taggedRevision),pkgUpgradeFile)
-				svnclient.propset('action','install',pkgUpgradeFile)
-
-				## Set revision on the config file (for new installs)
-				svnclient.propset('revision',str(taggedRevision),pkgConfigFile)
-
-				## Set an install order if requested
-				if options.instorder >= 0:
-					svnclient.propset('order',str(options.instorder),pkgConfigFile)
-
-				## Checkin
-				revision = svnclient.checkin(channelCheckout,"Added version " + str(taggedRevision) + ' of ' + packageName + ' into channel ' + channelName,recurse=True)
-			
-			except (OSError, IOError) as error:
-				print 'Failed to tag package into channel. Error was: ' + error.strerror + ' on ' + error.filename
-			except pysvn.ClientError as error:
-				print 'Subversion operation failed: ' + str(error)
-
-		#### CHANNEL UNTAG #####################################################
-
-		elif action == 'untag':
-			## Setup variables
-			channelCheckout = os.path.join(chancodir,'c_' + channelName)
-			pkgConfigFile   = os.path.join(channelCheckout,'packages',packageName)
-			pkgUpgradeFile  = os.path.join(channelCheckout,'upgrade')
-
-			## Make sure channel is up-to-date
-			svnclient.update(os.path.join(chancodir,'c_' + channelName))
-
-			try:
-				### Remove all previous properties on the upgrade file if it exists
-				if os.path.isfile(pkgUpgradeFile):
-					svnclient.propdel('name',pkgUpgradeFile)
-					svnclient.propdel('revision',pkgUpgradeFile)
-					svnclient.propdel('action',pkgUpgradeFile)
-				else:
-					#### Add the upgrade file cos it hasn't been used yet
-					open(pkgUpgradeFile,'w')
-					svnclient.add(pkgUpgradeFile)
-
-				## Delete channel/packages/packageName
-				if not os.path.isfile(pkgConfigFile):
-					os.unlink(pkgConfigFile)
-					svnclient.remove(pkgConfigFile)
-
-				## Set the upgrade properties to remove the package
-				svnclient.propset('name',packageName,pkgUpgradeFile)
-				svnclient.propset('action','remove',pkgUpgradeFile)
-
-				## Checkin
-				revision = svnclient.checkin(channelCheckout,"Removed " + packageName + ' from channel ' + channelName,recurse=True)
-			
-			except (OSError, IOError) as error:
-				print 'Failed to untag package from channel. Error was: ' + error.strerror + ' on ' + error.filename
-			except pysvn.ClientError as error:
-				print 'Subversion operation failed: ' + str(error)
-
+				taggedRevision = options.revision
 		else:
-			parser.print_help()
+			taggedRevision = currentPackageRevision
+
+		## make sure the new revision is higher than the current revision, if any
+		if os.path.isfile(pkgConfigFile):
+			currentRev = svnclient.propget('revision',pkgConfigFile)
+			currentRev = currentRev[pkgConfigFile]
+
+			if int(currentRev) == int(taggedRevision):
+				print 'The package is already tagged to that revision'
+				sys.exit(0)
+			elif int(currentRev) > int(taggedRevision):
+				print 'The package is already tagged to a more recent revision'
+				sys.exit(0)
+
+		## Touch the package name in packages/ in the channel
+		try:
+			### Remove all previous properties on the upgrade file if it exists
+			if os.path.isfile(pkgUpgradeFile):
+				svnclient.propdel('name',pkgUpgradeFile)
+				svnclient.propdel('revision',pkgUpgradeFile)
+				svnclient.propdel('action',pkgUpgradeFile)
+			else:
+				#### Add the upgrade file cos it hasn't been used yet
+				open(pkgUpgradeFile,'w')
+				svnclient.add(pkgUpgradeFile)
+
+			## Touch channel/packages/packageName
+			if not os.path.isfile(pkgConfigFile):
+				open(pkgConfigFile,'w')
+				svnclient.add(pkgConfigFile)
+
+			## Set name and revision on "add" (for upgrades)
+			svnclient.propset('name',packageName,pkgUpgradeFile)
+			svnclient.propset('revision',str(taggedRevision),pkgUpgradeFile)
+			svnclient.propset('action','install',pkgUpgradeFile)
+
+			## Set revision on the config file (for new installs)
+			svnclient.propset('revision',str(taggedRevision),pkgConfigFile)
+
+			## Set an install order if requested
+			if options.instorder >= 0:
+				svnclient.propset('order',str(options.instorder),pkgConfigFile)
+
+			## Checkin
+			revision = svnclient.checkin(channelCheckout,"Added version " + str(taggedRevision) + ' of ' + packageName + ' into channel ' + channelName,recurse=True)
+		
+		except (OSError, IOError) as error:
+			print 'Failed to tag package into channel. Error was: ' + error.strerror + ' on ' + error.filename
+
+		except pysvn.ClientError as error:
+			print 'Subversion operation failed: ' + str(error)
+
+	#### CHANNEL UNTAG #####################################################
+	elif action == 'untag' and len(args) == 3:
+
+		## Setup variables
+		channelName     = args[1]
+		packageName     = args[2]
+		channelCheckout = os.path.join(chancodir,'c_' + channelName)
+		pkgConfigFile   = os.path.join(channelCheckout,'packages',packageName)
+		pkgUpgradeFile  = os.path.join(channelCheckout,'upgrade')
+
+		if not metadict['channels'].has_key(channelName):
+			print "Sorry, that channel does not exist!"
+			sys.exit(1)
+
+		if not metadict['packages'].has_key(packageName):
+			print "Sorry, that channel does not exist!"
+			sys.exit(1)
+
+		## Make sure channel is up-to-date
+		svnclient.update(os.path.join(chancodir,'c_' + channelName))
+
+		try:
+			### Remove all previous properties on the upgrade file if it exists
+			if os.path.isfile(pkgUpgradeFile):
+				svnclient.propdel('name',pkgUpgradeFile)
+				svnclient.propdel('revision',pkgUpgradeFile)
+				svnclient.propdel('action',pkgUpgradeFile)
+			else:
+				#### Add the upgrade file cos it hasn't been used yet
+				open(pkgUpgradeFile,'w')
+				svnclient.add(pkgUpgradeFile)
+
+			## Delete channel/packages/packageName
+			if not os.path.isfile(pkgConfigFile):
+				os.unlink(pkgConfigFile)
+				svnclient.remove(pkgConfigFile)
+
+			## Set the upgrade properties to remove the package
+			svnclient.propset('name',packageName,pkgUpgradeFile)
+			svnclient.propset('action','remove',pkgUpgradeFile)
+
+			## Checkin
+			revision = svnclient.checkin(channelCheckout,"Removed " + packageName + ' from channel ' + channelName,recurse=True)
+		
+		except (OSError, IOError) as error:
+			print 'Failed to untag package from channel. Error was: ' + error.strerror + ' on ' + error.filename
+
+		except pysvn.ClientError as error:
+			print 'Subversion operation failed: ' + str(error)
+
+	#### PRIORITY #####################################################
+	elif action == 'priority' and len(args) == 4:
+
+		## Setup variables
+		channelName     = args[1]
+		packageName     = args[2]
+		installOrder    = args[3]
+		channelCheckout = os.path.join(chancodir,'c_' + channelName)
+		pkgConfigFile   = os.path.join(channelCheckout,'packages',packageName)
+
+		if not metadict['channels'].has_key(channelName):
+			print "Sorry, that channel does not exist!"
+			sys.exit(1)
+
+		if not metadict['packages'].has_key(packageName):
+			print "Sorry, that channel does not exist!"
+			sys.exit(1)
+
+		## Make sure channel is up-to-date
+		svnclient.update(os.path.join(chancodir,'c_' + channelName))
+
+		try:
+			## Set the svn property
+			svnclient.propset('order',str(installOrder),pkgConfigFile)
+
+			## Checkin
+			revision = svnclient.checkin(channelCheckout,"Removed " + packageName + ' from channel ' + channelName,recurse=True)
+
+		except pysvn.ClientError as error:
+			print 'Subversion operation failed: ' + str(error)
+
+	else:
+		parser.print_help()
+
+	## Turn "metadict" into json
+	jsonOut = json.dumps(metadict, sort_keys=True, indent=4)
+
+	## Write to file
+	try:
+		metafile.seek(0)
+		metafile.truncate(0)
+		metafile.write(jsonOut)
+		metafile.close
+	except (IOError, OSError) as error:
+		print 'Failed to write metadata: ' + error.strerror + ' on ' + error.filename
+
+	## unlock
+	fcntl.flock(metafile,fcntl.LOCK_UN)
 
 def svn_create(path,name,svntype):
 	## Validate the name
@@ -306,4 +454,8 @@ def svn_delete(path,svntype):
 		sys.exit(1)
 
 if __name__ == "__main__":
-    main()
+	if sys.version < '2.6':
+		print 'Wrong Python Version !!!'
+		sys.exit(1)
+	else:
+	    main()
