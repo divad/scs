@@ -114,6 +114,7 @@ def main():
 		jsonData = metafile.read()
 		metafile.seek(0)
 	except (IOError, OSError) as e:
+		fcntl.flock(metafile,fcntl.LOCK_UN)
 		print 'Unable to read from ' + e.filename + ': ' + e.strerror
 		sys.exit(1)
 
@@ -129,12 +130,6 @@ def main():
 			print 'Unable to understand metadata: ' + str(e)
 			sys.exit(0)
 
-	#print str(type(metadict))
-	#print str(type(metadict['channels']))
-	#fcntl.flock(metafile,fcntl.LOCK_UN)	
-	#sys.exit(0)
-
-	
 
 	#### PACKAGE CREATE ####################################################
 	if action == 'pkg-create' and len(args) == 2:

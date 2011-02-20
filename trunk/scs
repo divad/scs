@@ -13,10 +13,11 @@ import grp
 import hashlib
 import ConfigParser
 from optparse import OptionParser, OptionGroup
+import fcntl
 
 #### TODO TODO TODO TODO
 # TODO - different output formats (csv? xml? json?)
-# TODO log runScripts? print in verbose mode
+# TODO log runScripts? print in verbose mode??
 
 ################################################################################
 ################################################################################
@@ -37,7 +38,7 @@ def output(o):
 ################################################################################
 
 def fatal(o,exitcode=1):
-	print 'SCS: ' + str(o)
+	sys.stderr.write('SCS: ' + str(o) + "\n")
 	sys.exit(exitcode)
 
 ################################################################################
@@ -101,8 +102,9 @@ def checkForLocalChanges(pkg):
 ################################################################################
 
 def packageInstalled(pkg):
-	global scsroot
-	if os.path.exists(os.path.join(scsroot,'packages',pkg)):
+	global metadataDict
+
+	if metadataDict['packages'].has_key(pkg):
 		return True
 	else:
 		return False
@@ -111,8 +113,9 @@ def packageInstalled(pkg):
 ################################################################################
 
 def channelSubscribed(channel):
-	global scsroot
-	if os.path.exists(os.path.join(scsroot,'channels',channel)):
+	global metadataDict
+
+	if metadataDict['channels'].has_key(channel):
 		return True
 	else:
 		return False
@@ -194,52 +197,69 @@ def fetchMetadata(metadataUrl):
 ################################################################################
 ################################################################################
 
-def printPkgInfo(pkg):
-	global scsroot
-
-	try:
-		f = open(os.path.join(scsroot,'packages',pkg,'conf','metadata.json'), 'r')
-		jsonData = f.read()
-		f.close()
-	except IOError as e:
-		fatal('Unable to read from ' + e.filename + ': ' + e.strerror)
-
-	try:
-		data = json.loads(jsonData)
-	except (TypeError,ValueError) as e:
-		fatal('Unable to understand data: ' + str(e))
-	else:
-		if type(data).__name__=='dict':	
-			if data.has_key('name') and data.has_key('revision') and data.has_key('desc'):
-				print '{0:24}    {1:24}    {2:24}'.format(str(data['name']), str(data['revision']), str(data['desc']))
-			elif data.has_key('name') and data.has_key('revision'):
-				print '{0:38}    {1:38}'.format(str(data['name']), str(data['revision']))
-			else:
-				fatal('Unable to understand data: ' + str(e))
-		else:
-			fatal('Unable to understand data: ' + str(e))
-
-################################################################################
-################################################################################
-
 def uninitPkg(pkg):
 	global scsroot
 
-	## Run uninit script
-	## Delete directories.
+	if packageInstalled(pkg):
+		(scode,sout,serr) = runScript(pkg,'uninit')
+		if not scode == 0:
+			output('Script "uninit" returned non-zero')
+			return 1
+		else:
+			## Delete data
+			shutil.rmtree(os.path.join(scsroot,'packages',pkg))
 
-	(scode,sout,serr) = runScript(pkg,'uninit')
-	if not scode == 0:
-		output('Script "uninit" returned non-zero')
-		return 1
+			## Update metadata
+			del(metadataDict['packages'][pkg])
+
+			## Output
+			verbose('Removed package "' + pkg + '"',1)
+	
+			## Return OK
+			return 0
 	else:
-		shutil.rmtree(os.path.join(scsroot,'packages',pkg))
+		verbose('Package "' + pkg + '" not installed so not removing',1)
 		return 0
 
 ################################################################################
 ################################################################################
 
-def initPkg(pkg):
+## TODO
+def updateChannel(channel):
+	if channelSubscribed(channel):	
+		remotePath = svnroot + '/c_' + channel + '/'
+		localPath  = os.path.join(scsroot,'channels',channel)
+		localPkgs  = os.path.join(localPath,'packages')
+		svnclient = pysvn.Client()
+		svnclient.update(localPkgs)
+
+		## Get the latest revision of the channel
+
+		## Decide upon which revision to go to
+
+		## Get the "upgrade" file for this revision
+		svnclient.checkout(remotePath + 'upgrade',os.path.join(localPath,'upgrade'))
+
+		## Get contents of upgrade file
+
+		## Do what it says!
+
+	else:
+		fatal('Not subscribed to channel ' + channel)
+
+			## apply action in "upgrade" file.
+			## goto 10 if needed.
+
+################################################################################
+################################################################################
+
+#### RETURN CODES for initPkg:
+## 1 = Pre-script failed, package not installed
+## 2 = MAJOR fault during inst
+## 3 = Minor fault during inst
+## 4 = Non-zero exit from a post-script
+
+def initPkg(pkg,rev=-1):
 	global scsroot
 	global svnroot
 	global options
@@ -258,7 +278,11 @@ def initPkg(pkg):
 	infoList = svnclient.info2(remotePath,recurse=False)
 	for infoTuple in infoList:
 		infoDict = infoTuple[1]
-		latestRevision = infoDict['rev'].number
+		latestRevision = infoDict['rev']
+
+	## Should we use a speciifc max version? (for channels tagged at a specific version)
+	if rev >= 0 and rev <= latestRevision.number:
+		latestRevision = pysvn.Revision(pysvn.opt_revision_kind.number, rev)
 
 	## What type, init or upgrade?
 	upgrade = False
@@ -276,10 +300,8 @@ def initPkg(pkg):
 			infoDict = infoTuple[1]
 			localRevision = infoDict['rev'].number
 
-		if localRevision == latestRevision:
+		if localRevision == latestRevision.number:
 			verbose('Package ' + pkg + ' up to date (revision ' + str(localRevision) + ')',1)
-			#revisionToUse = pysvn.Revision(pysvn.opt_revision_kind.head)
-			## Return 0, we're DONE! :)
 			return 0
 		else:
 			revisionToUse = pysvn.Revision(pysvn.opt_revision_kind.number, int(localRevision) + 1)
@@ -301,31 +323,38 @@ def initPkg(pkg):
 		if not scode == 0:
 			output('preinc script returned non-zero, cancelling pkg init')
 			return 1
+
+		## Update data now
+		verbose('Updating package data',2)
+		svnclient.update(localData,revision=revisionToUse)
 		
 	else:
-		revisionToUse = pysvn.Revision(pysvn.opt_revision_kind.head)
+		revisionToUse = latestRevision
 		verbose('Installing ' + pkg,1)
 
-		## set up directory layout
-		try:
-			os.mkdir(localPath)
-			os.mkdir(os.path.join(localPath,'conf'))
-			os.mkdir(os.path.join(localPath,'scripts'))
-			os.mkdir(os.path.join(localPath,'data'))
-		except (OSError, IOError) as error:
-			print 'Failed to init package. Error was: ' + error.strerror + ' on ' + error.filename
-			sys.exit(0)
+		## Create paths only if they haven't been already
+		## This can happen if a pre* script failed
+		if not os.path.isdir(localPath):
+			## set up directory layout
+			try:
+				os.mkdir(localPath)
+				os.mkdir(os.path.join(localPath,'conf'))
+				os.mkdir(os.path.join(localPath,'scripts'))
+				os.mkdir(os.path.join(localPath,'data'))
+			except (OSError, IOError) as error:
+				print 'Failed to init package. Error was: ' + error.strerror + ' on ' + error.filename
+				sys.exit(0)
+
+			## Initial check out of data
+			verbose('Deploying package data',2)
+			svnclient.checkout(remotePath + 'data',localData,revision=revisionToUse)
+
+		else:
+			verbose('Updating package data',2)
+			svnclient.update(localData,revision=revisionToUse)
 
 	verbose('Deploying scripts',2)
 	svnclient.export(remotePath + 'scripts',localScripts,revision=revisionToUse,force=True,recurse=True)
-
-	## If initial init, use "checkout", if not, use "update"
-	if upgrade:
-		verbose('Updating package data',2)
-		svnclient.update(localData,revision=revisionToUse)
-	else:
-		verbose('Deploying package data',2)
-		svnclient.checkout(remotePath + 'data',localData,revision=revisionToUse)
 
 	## Run scripts
 	if upgrade:
@@ -352,10 +381,6 @@ def initPkg(pkg):
 	## and channel
 	faultOccured = False
 	faultCode    = 0
-	## 1 = Pre-script failed, nothing happened
-	## 2 = MAJOR fault during inst
-	## 3 = Minor fault during inst
-	## 4 = Non-zero exit from a post-script
 
 	## Get properties
 	propList = svnclient.proplist(localData,recurse=True)
@@ -538,12 +563,15 @@ def initPkg(pkg):
 	## Output some info
 	verbose('Package ' + pkg + ' now at revision ' + str(revisionToUse.number),1)
 
+	## update metadata
+	metadataDict['packages'][pkg] = { 'name': pkg, 'revision': revisionToUse.number, 'desc': 'Random fake desc'}
+
 	if faultOccured:
 		output('An error occured during init')
 		return faultCode
 	else:
 		## Recursive call package if we're not at the latest now
-		if revisionToUse.number < latestRevision:
+		if revisionToUse.number < latestRevision.number:
 			return initPkg(pkg)	
 		else:
 			verbose('Package ' + pkg + ' now up to date',1)
@@ -558,7 +586,7 @@ def main():
 
     Update functions:
 
-T       check                      List available updates from channels
+        check                      List available updates from channels
 T       update        CHANNEL      Apply updates from a channel
 T       update-all                 Apply all updates from all channels
 
@@ -578,13 +606,13 @@ T       update-all                 Apply all updates from all channels
         owner         FILEPATH     Determine if FILEPATH is owned by a package
 
     Channel-related actions:
-T       subscribed                 List channels this system is subscribed to
+        subscribed                 List channels this system is subscribed to
         channels                   List all available channels 
-T       subscribe     CHANNEL      Subscribe to a channel
-T       unsubscribe   CHANNEL      Unsubscribe from a channel
+        subscribe     CHANNEL      Subscribe to a channel
+        unsubscribe   CHANNEL      Unsubscribe from a channel
 
     Other actions:
-        bootstrap                  Set up SCS according to the defaults'''
+T       bootstrap                  Set up SCS according to the defaults'''
 
 	## Set a 'good' working directory
 	os.chdir('/tmp')
@@ -614,9 +642,9 @@ T       unsubscribe   CHANNEL      Unsubscribe from a channel
 	global svnroot
 	global metaurl
 
-	scsroot = '/opt/scs/'
-	svnroot = ''
-	metaurl = ''
+	scsroot  = '/opt/scs/'
+	svnroot  = ''
+	metaurl  = ''
 
 	if config.has_option('client','scs root'):
 		configValue = config.get('client','scs root')
@@ -636,6 +664,39 @@ T       unsubscribe   CHANNEL      Unsubscribe from a channel
 	else:
 		fatal('No metadata url defined in ' + options.config)
 
+	#### LOCK AND LOAD METADATA
+	## Open metadata file, lock it, and read contents
+	metadataPath = os.path.join(scsroot,'client.meta')
+	try:
+		## Create client.meta if it does not exist
+		if not os.path.isfile(metadataPath):
+			open(metadataPath,'w')
+
+		metadataFile = open(metadataPath,'r+')
+		fcntl.flock(metadataFile,fcntl.LOCK_EX)
+	except (IOError, OSError) as e:
+		fatal('Unable to lock ' + str(e.filename) + ': ' + str(e.strerror))
+
+	try:
+		jsonData = metadataFile.read()
+		metadataFile.seek(0)
+	except (IOError, OSError) as e:
+		fcntl.flock(metadataFile,fcntl.LOCK_UN)
+		fatal('Unable to read from ' + e.filename + ': ' + e.strerror)
+
+	global metadataDict
+
+	## Handle empty data
+	if len(jsonData) == 0:
+		metadataDict = {'channels': {}, 'packages': {}}
+	else:
+		## Turn json data into python objects
+		try:
+			metadataDict = json.loads(jsonData)
+		except (TypeError,ValueError) as e:
+			fcntl.flock(metadataFile,fcntl.LOCK_UN)
+			fatal('Unable to understand metadata: ' + str(e))
+
 	#### SWTICH ACTIONS
 	if len(args) < 1:
 		parser.print_help()
@@ -645,9 +706,23 @@ T       unsubscribe   CHANNEL      Unsubscribe from a channel
 ################################################################################
 
 		if action == 'installed':
-			pkgs = os.listdir(os.path.join(scsroot,'packages'))
-			for pkg in pkgs:
-				printPkgInfo(pkg)
+			output = ''
+			for pkg in metadataDict['packages']:
+				data = metadataDict['packages'][pkg]
+				if type(data).__name__=='dict':
+					if data.has_key('name') and data.has_key('revision') and data.has_key('desc'):
+						output += '{0:24}    {1:24}    {2:24}'.format(str(data['name']), str(data['revision']), str(data['desc']))
+					elif data.has_key('name') and data.has_key('revision'):
+						output += '{0:24}    {1:24}'.format(str(data['name']), str(data['revision']))
+					else:
+						fatal('Unable to understand data: ' + str(e))
+				else:
+					fatal('Unable to understand data: ' + str(e))
+
+			if len(output) > 0:
+				print '{0:24}    {1:24}    {2:24}'.format('PACKAGE NAME','LOCAL REVISION','DESCRIPTION')
+				print '{0:24}    {1:24}    {2:24}'.format('------------','--------------','-----------')
+				print output
 
 ################################################################################
 
@@ -760,9 +835,23 @@ T       unsubscribe   CHANNEL      Unsubscribe from a channel
 ################################################################################
 
 		elif action == 'subscribed':
-			print 'todo'
+			output = ''
+			for channel in metadataDict['channels']:
+				data = metadataDict['channels'][channel]
+				if type(data).__name__=='dict':
+					if data.has_key('name') and data.has_key('revision') and data.has_key('desc'):
+						output += '{0:24}    {1:24}    {2:24}'.format(str(data['name']), str(data['revision']), str(data['desc']))
+					elif data.has_key('name') and data.has_key('revision'):
+						output += '{0:24}    {1:24}'.format(str(data['name']), str(data['revision']))
+					else:
+						fatal('Unable to understand data: ' + str(e))
+				else:
+					fatal('Unable to understand data: ' + str(e))
 
-			## easy peasy. see "installed" for example.
+			if len(output) > 0:
+				print '{0:24}    {1:24}    {2:24}'.format('CHANNEL NAME','LOCAL REVISION','DESCRIPTION')
+				print '{0:24}    {1:24}    {2:24}'.format('------------','--------------','-----------')
+				print output
 
 ################################################################################
 
@@ -777,54 +866,168 @@ T       unsubscribe   CHANNEL      Unsubscribe from a channel
 				fatal("Already subscribed")
 			else:
 
-				## set up directory layout
-				try:
-					os.mkdir(localPath)
-					os.mkdir(localPkgs)
-				except (OSError, IOError) as error:
-					print 'Failed to subscribe to channel. Error was: ' + error.strerror + ' on ' + error.filename
-					sys.exit(0)
+				if not os.path.isdir(localPath):
+					## set up directory layout
+					## but only if it isn't there
+					## this can happen if subscribe fails
+					try:
+						os.mkdir(localPath)
+						os.mkdir(localPkgs)
+					except (OSError, IOError) as error:
+						print 'Failed to subscribe to channel. Error was: ' + error.strerror + ' on ' + error.filename
+						sys.exit(0)
 
-				## Download package information
-				svnclient.checkout(remotePath + 'packages',localPkgs)
+					## Download package information
+					svnclient.checkout(remotePath + 'packages',localPkgs)
+				else:
+					## Update package information
+					svnclient.update(localPkgs)
 
 				## Now do a property walk to know what packages to install
+				propList = svnclient.proplist(localPkgs,recurse=True)
+
+				pkgList = []
+
+				for propSet in propList:
+					fname      = propSet[0]
+					properties = propSet[1]
+
+					if 'revision' in properties and 'name' in properties:
+						if 'order' in properties:
+							pkgList.append((int(properties['order']),properties['name'],int(properties['revision'])))
+						else:
+							pkgList.append((999999999,properties['name'],properties['revision']))
+
+				## Sort according to install order
+				## use -pkg[0] for reverse
+				pkgList = sorted(pkgList, key=lambda pkg: pkg[0])
 				
-			## Go through "packages" and call init with specific version!
+				for pkgT in pkgList:
+					result = initPkg(pkgT[1],rev=pkgT[2])
+
+					## Result of pkgInit
+					if result > 0:
+						if result == 1:
+							## Failed to init package, thus the channel subscribe has failed!
+							fatal("Could not subscribe from channel. Please correct the error and try to subscribe again")
+						else:
+							print 'blargh'
+							## Channel subscribed...but there were problems. TODO PAUSE CHANNEL?
+
+				## What revision did we just subscribe to?
+				infoList = svnclient.info2(localPkgs,recurse=False)
+				for infoTuple in infoList:
+					infoDict = infoTuple[1]
+					localRevision = infoDict['rev'].number
+
+				## Update metadata
+				metadataDict['channels'][channel] = { 'name': channel, 'revision': localRevision, 'desc' : 'fake desc'}
+
+				## Output
+				verbose('Subscribed to channel ' + channel + ' - at revision ' + str(localRevision),1)
 
 ################################################################################
 
 		elif action == 'unsubscribe':
-			print 'todo'
+			channel    = args[1]
+			localPath  = os.path.join(scsroot,'channels',channel)
+			localPkgs  = os.path.join(localPath,'packages')
+			svnclient = pysvn.Client()
 
-			## Go through channel SVN and remove packages (call uninit that is)
+			if not channelSubscribed(channel):
+				fatal("Not subscribed to that channel")
+			else:
+				## Now do a property walk to know what packages to install
+				propList = svnclient.proplist(localPkgs,recurse=True)
+
+				pkgList = []
+
+				for propSet in propList:
+					fname      = propSet[0]
+					properties = propSet[1]
+
+					if 'revision' in properties and 'name' in properties:
+						if 'order' in properties:
+							pkgList.append((int(properties['order']),properties['name'],int(properties['revision'])))
+						else:
+							pkgList.append((999999999,properties['name'],properties['revision']))
+
+				## Sort according to remove order
+				pkgList = sorted(pkgList, key=lambda pkg: -pkg[0])
+				
+				for pkgT in pkgList:
+					result = uninitPkg(pkgT[1])
+
+					if result == 1:
+						## Failed to remove, could not unsubscribe!
+						fatal("Could not unsubscribe from channel. Please correct the error and try to unsubscribe again")
+						
+				## Delete data
+				shutil.rmtree(localPath)
+
+				## Update metadata
+				del(metadataDict['channels'][channel])
+
+				## Output
+				verbose('Unsubscribed from channel ' + channel,1)
 
 ################################################################################
 
 		elif action == 'check':
-			print 'todo'
+			## SVN
+			svnclient = pysvn.Client()
 
-			## Check local channel version against remote
-			## print channels which need to be updated
+			output = ''
+
+			for channel in metadataDict['channels']:
+				remotePath   = svnroot + '/c_' + channel + '/'
+
+				## Get latest remote revision
+				infoList = svnclient.info2(remotePath,recurse=False)
+				for infoTuple in infoList:
+					infoDict = infoTuple[1]
+					latestRevision = infoDict['rev']
+
+				if latestRevision.number > int(metadataDict['channels'][channel]['revision']):
+					output += '{0:24}    {1:24}    {2:24}'.format(channel,str(latestRevision.number), str(metadataDict['channels'][channel]['revision']))
+
+			if len(output) > 0:
+				print '{0:24}    {1:24}    {2:24}'.format('CHANNEL NAME','LATEST REVISION','LOCAL REVISION')
+				print '{0:24}    {1:24}    {2:24}'.format('------------','---------------','--------------')
+				print output
 
 ################################################################################
 
 		elif action == 'update' and len(args) == 2:
-			print 'todo'
+			print 'TODO'
 
-			## update channel.
+			## if subscribed...
+			## update channel svn.
 			## apply action in "upgrade" file.
 			## goto 10 if needed.
 
 		elif action == 'update-all':
-			print 'todo'
+			print 'TODO'
 
 			## as above, but for all channels
 
 ################################################################################
 
-		elif action == 'upgrade':
-			print 'todo'
+		else:
+			parser.print_help()
+
+		#### save metadata changes to disk
+		## Turn "metadict" into json
+		jsonOut = json.dumps(metadataDict, sort_keys=True, indent=4)
+
+		## Write to file
+		try:
+			metadataFile.seek(0)
+			metadataFile.truncate(0)
+			metadataFile.write(jsonOut)
+			metadataFile.close
+		except (IOError, OSError) as error:
+			fatal('Failed to write client metadata: ' + error.strerror + ' on ' + error.filename)
 
 ################################################################################
 
