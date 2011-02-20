@@ -48,26 +48,15 @@ on upgrade:
          /channel
          /db
 
-init:
-	a 1
-	b 2
-	c 1
-	d 5
-	e 1
- 
 
-a1 a
-b1 ab
-c1 abc
-d1 abcd
-e1 abcde
-d2 abced    
-b2 acedb
+CHANNELS
+	name
+	revision.
+	state - ok, paused...
+	desc?
 
-
-
-d 6
-e 1
-
-history:
-	
+PACKAGES
+	name
+	revision
+	desc
+	state?
