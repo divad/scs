@@ -305,12 +305,13 @@ def main():
 				open(pkgConfigFile,'w')
 				svnclient.add(pkgConfigFile)
 
-			## Set name and revision on "add" (for upgrades)
+			## Set name and revision on "upgrade" file
 			svnclient.propset('name',packageName,pkgUpgradeFile)
 			svnclient.propset('revision',str(taggedRevision),pkgUpgradeFile)
 			svnclient.propset('action','install',pkgUpgradeFile)
 
 			## Set revision on the config file (for new installs)
+			svnclient.propset('name',packageName,pkgConfigFile)
 			svnclient.propset('revision',str(taggedRevision),pkgConfigFile)
 
 			## Set an install order if requested

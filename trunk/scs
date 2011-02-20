@@ -16,8 +16,32 @@ from optparse import OptionParser, OptionGroup
 
 #### TODO TODO TODO TODO
 # TODO - different output formats (csv? xml? json?)
-# TODO verbose() command and output() command?
 # TODO log runScripts? print in verbose mode
+
+################################################################################
+################################################################################
+
+def verbose(o,verbosity):
+	global verboseLevel
+
+	if verboseLevel >= verbosity:
+		print 'SCS: ' + str(o)
+
+################################################################################
+################################################################################
+
+def output(o):
+	print 'SCS: ' + str(o)
+
+################################################################################
+################################################################################
+
+def fatal(o,exitcode=1):
+	print 'SCS: ' + str(o)
+	sys.exit(exitcode)
+
+################################################################################
+################################################################################
 
 ## "check" property
 ### before increment it checks all files with "check" property
@@ -26,7 +50,8 @@ from optparse import OptionParser, OptionGroup
 #### - ignore - (default) - Do nothing - don't care - OVERWITES LOCAL CHANGES
 #### - warn - Warn the file has changed - OVERWRITES LOCAL CHANGES
 #### - skip - don't change /that/ file, and that file alone, on the next increment - DOES NOT OVERWRITE
-def checkForLocalChanges(scsroot,pkg):
+def checkForLocalChanges(pkg):
+	global scsroot
 	ignoreList = []
 	svnclient = pysvn.Client()
 	propList = svnclient.proplist(os.path.join(scsroot,'packages',pkg,'data'),recurse=True)
@@ -38,19 +63,19 @@ def checkForLocalChanges(scsroot,pkg):
 		if 'dest' in properties:
 			dest = properties['dest']
 
-			print 'SCS: Checking for local changes on ' + dest
+			verbose('Checking for local changes on ' + dest,3)
 
 			## Get SHA sums
 			try:
 				sourceh = shasum(source)
 				desth   = shasum(dest)
 			except Exception as e:
-				print 'SCS: Cannot check for local changes on ' + dest + ': ' + str(e)
+				output('Cannot check for local changes on ' + dest + ': ' + str(e))
 			else:
 				## Compare sums
 				if not sourceh == desth:
 
-					print 'SCS: The file ' + dest + ' has been modified outside of SCS control'
+					verbose('The file ' + dest + ' has been modified outside of SCS control',1)
 
 					## TODO FUTURE make the default come from a revprop?
 					checkAction = 'ignore'
@@ -58,14 +83,14 @@ def checkForLocalChanges(scsroot,pkg):
 					if 'check' in properties:
 						checkAction = properties['check']
 
-					print 'SCS: The file has been configured to "' + checkAction + '" in this scenario'
+					verbose('The file has been configured to "' + checkAction + '" in this scenario',2)
 
 					if checkAction == 'fail':
-						print "SCS: ERROR! Local changes found to file " + dest
-						print "SCS: ERROR! Transaction failed. Could not init pkg"
-						return 0
+						output("ERROR! Local changes found to file " + dest)
+						output("ERROR! Transaction failed. Could not init pkg")
+						return 1
 					elif checkAction == 'warn':
-						print "SCS: WARNING! Local changes found to file " + dest
+						output("WARNING! Local changes found to file " + dest)
 					elif checkAction == 'skip':
 						## add the file to the "ignore" list
 						ignoreList.append(source)
@@ -75,7 +100,8 @@ def checkForLocalChanges(scsroot,pkg):
 ################################################################################
 ################################################################################
 
-def packageInstalled(scsroot,pkg):
+def packageInstalled(pkg):
+	global scsroot
 	if os.path.exists(os.path.join(scsroot,'packages',pkg)):
 		return True
 	else:
@@ -84,7 +110,18 @@ def packageInstalled(scsroot,pkg):
 ################################################################################
 ################################################################################
 
-def listFiles(scsroot,pkg):
+def channelSubscribed(channel):
+	global scsroot
+	if os.path.exists(os.path.join(scsroot,'channels',channel)):
+		return True
+	else:
+		return False
+
+################################################################################
+################################################################################
+
+def listFiles(pkg):
+	global scsroot
 	svnclient = pysvn.Client()
 	propList = svnclient.proplist(os.path.join(scsroot,'packages',pkg,'data'),recurse=True)
 
@@ -112,17 +149,16 @@ def shasum(filePath,blocksize=2**20):
 ################################################################################
 ################################################################################
 
-def runScript(scsroot,pkgName,scriptName):
-	print 'SCS: Executing ' + scriptName + ' on package ' + pkgName
+def runScript(pkgName,scriptName):
+	global scsroot
+	verbose('SCS: Executing ' + scriptName,2)
 	scriptPath = os.path.join(scsroot,'packages',pkgName,'scripts',scriptName)
 
 	## CHMOD First
 	os.chmod(scriptPath,stat.S_IRWXU)
 
-	print scriptPath
-
 	if os.path.getsize(scriptPath) == 0:
-		print "SCS: Script is empty; not executing"
+		verbose("Script is empty; not executing",3)
 		return (0, '', '')
 
 	## Now run the script
@@ -133,69 +169,385 @@ def runScript(scsroot,pkgName,scriptName):
 	except OSError as e:
 		## UNIX codes will only ever be 0-255
 		## Thus use -1 to signify an OS error
-		print 'SCS: Execution of script ' + scriptName + ' failed: ' + str(e)
+		output('Execution of script ' + scriptName + ' failed: ' + str(e))
 		return (-1,str(e),str(e))
 
 ################################################################################
 ################################################################################
 
 def fetchMetadata(metadataUrl):
-	#print 'Fetching metadata...'
+	verbose('Fetching metadata from server',3)
 	try:
 		f = urllib.urlopen(metadataUrl)
 		jsonData = f.read()
 		f.close()
 	except IOError as e:
-		print 'Unable to read from ' + e.filename + ': ' + e.strerror
-		sys.exit(1)
+		fatal('Unable to read from ' + e.filename + ': ' + e.strerror)
 
 	try:
 		metadict = json.loads(jsonData)
 	except (TypeError,ValueError) as e:
-		print 'Unable to understand server metadata: ' + str(e)
-		sys.exit(2)
+		fatal('Unable to understand server metadata: ' + str(e))
 
 	return metadict
 
 ################################################################################
 ################################################################################
 
-def processPackage(pkg):
-	if type(pkg).__name__=='dict':
-		if pkg.has_key('name') and pkg.has_key('revision') and pkg.has_key('desc'):
-			print str(pkg['name']) + '-' + str(pkg['revision']) + "\t\t" + str(pkg['desc'])
-		elif pkg.has_key('name') and pkg.has_key('revision'):
-			print str(pkg['name']) + '-' + str(pkg['revision'])
+def printPkgInfo(pkg):
+	global scsroot
+
+	try:
+		f = open(os.path.join(scsroot,'packages',pkg,'conf','metadata.json'), 'r')
+		jsonData = f.read()
+		f.close()
+	except IOError as e:
+		fatal('Unable to read from ' + e.filename + ': ' + e.strerror)
+
+	try:
+		data = json.loads(jsonData)
+	except (TypeError,ValueError) as e:
+		fatal('Unable to understand data: ' + str(e))
+	else:
+		if type(data).__name__=='dict':	
+			if data.has_key('name') and data.has_key('revision') and data.has_key('desc'):
+				print '{0:24}    {1:24}    {2:24}'.format(str(data['name']), str(data['revision']), str(data['desc']))
+			elif data.has_key('name') and data.has_key('revision'):
+				print '{0:38}    {1:38}'.format(str(data['name']), str(data['revision']))
+			else:
+				fatal('Unable to understand data: ' + str(e))
 		else:
-			print 'fail2'
+			fatal('Unable to understand data: ' + str(e))
+
+################################################################################
+################################################################################
+
+def uninitPkg(pkg):
+	global scsroot
+
+	## Run uninit script
+	## Delete directories.
+
+	(scode,sout,serr) = runScript(pkg,'uninit')
+	if not scode == 0:
+		output('Script "uninit" returned non-zero')
+		return 1
 	else:
-		print 'uh oh - that was not a dict!'
+		shutil.rmtree(os.path.join(scsroot,'packages',pkg))
+		return 0
 
 ################################################################################
 ################################################################################
 
-def processPackageFromJson(jsonData):
+def initPkg(pkg):
+	global scsroot
+	global svnroot
+	global options
+	global args
+
+	## SVN
+	svnclient = pysvn.Client()
+
+	## Work out paths
+	remotePath   = svnroot + '/p_' + pkg + '/' 
+	localPath    = os.path.join(scsroot,'packages',pkg)
+	localScripts = os.path.join(localPath,'scripts')
+	localData    = os.path.join(localPath,'data')
+	
+	## Get latest remote revision
+	infoList = svnclient.info2(remotePath,recurse=False)
+	for infoTuple in infoList:
+		infoDict = infoTuple[1]
+		latestRevision = infoDict['rev'].number
+
+	## What type, init or upgrade?
+	upgrade = False
+
+	## A list of files to ignore during property-apply phase
+	ignoreList = []
+
+	## If this is an upgrade
+	if packageInstalled(pkg):
+		upgrade = True
+
+		## Get local revision installed
+		infoList = svnclient.info2(localData,recurse=False)
+		for infoTuple in infoList:
+			infoDict = infoTuple[1]
+			localRevision = infoDict['rev'].number
+
+		if localRevision == latestRevision:
+			verbose('Package ' + pkg + ' up to date (revision ' + str(localRevision) + ')',1)
+			#revisionToUse = pysvn.Revision(pysvn.opt_revision_kind.head)
+			## Return 0, we're DONE! :)
+			return 0
+		else:
+			revisionToUse = pysvn.Revision(pysvn.opt_revision_kind.number, int(localRevision) + 1)
+
+		## TODO FUTURE get revprop to see if we should skip this revision or not
+
+		verbose('Upgrading ' + pkg + ' to revision ' + str(revisionToUse.number),1)
+
+		## Should we ignore local changes?
+		ignore = options.ignore
+
+		## If we shouldn't then check for local changes
+		if not ignore:
+			verbose('Checking for local changes',1)
+			ignoreList = checkForLocalChanges(pkg)
+
+		## Pre-increment ("pre-upgrade") script
+		(scode,sout,serr) = runScript(pkg,'preinc')
+		if not scode == 0:
+			output('preinc script returned non-zero, cancelling pkg init')
+			return 1
+		
+	else:
+		revisionToUse = pysvn.Revision(pysvn.opt_revision_kind.head)
+		verbose('Installing ' + pkg,1)
+
+		## set up directory layout
+		try:
+			os.mkdir(localPath)
+			os.mkdir(os.path.join(localPath,'conf'))
+			os.mkdir(os.path.join(localPath,'scripts'))
+			os.mkdir(os.path.join(localPath,'data'))
+		except (OSError, IOError) as error:
+			print 'Failed to init package. Error was: ' + error.strerror + ' on ' + error.filename
+			sys.exit(0)
+
+	verbose('Deploying scripts',2)
+	svnclient.export(remotePath + 'scripts',localScripts,revision=revisionToUse,force=True,recurse=True)
+
+	## If initial init, use "checkout", if not, use "update"
+	if upgrade:
+		verbose('Updating package data',2)
+		svnclient.update(localData,revision=revisionToUse)
+	else:
+		verbose('Deploying package data',2)
+		svnclient.checkout(remotePath + 'data',localData,revision=revisionToUse)
+
+	## Run scripts
+	if upgrade:
+		(scode,sout,serr) = runScript(pkg,'preup')
+		if not scode == 0:
+			output('Script "preup" returned non-zero, cancelling pkg init')
+			return 1
+	else:
+		(scode,sout,serr) = runScript(pkg,'preinit')
+		if not scode == 0:
+			output('Script "preinc" returned non-zero, cancelling pkg init')
+			return 1
+
+	(scode,sout,serr) = runScript(pkg,'preinst')
+	if not scode == 0:
+		output('Script "preinst" returned non-zero, cancelling pkg init')
+		return 1
+
+	###### END PRE-SECTION
+	###### BEGIN INST-SECTION
+
+	## If anything fails now then we can't/shouldn't stop, but we should mark
+	## a failure and then optionally the calling function can suspend the pkg
+	## and channel
+	faultOccured = False
+	faultCode    = 0
+	## 1 = Pre-script failed, nothing happened
+	## 2 = MAJOR fault during inst
+	## 3 = Minor fault during inst
+	## 4 = Non-zero exit from a post-script
+
+	## Get properties
+	propList = svnclient.proplist(localData,recurse=True)
+
+	for propSet in propList:
+		source     = propSet[0]
+		properties = propSet[1]
+
+		## Skip files marked as "skip" during check for local changes phase
+		if source in ignoreList:
+			verbose('Skipping file ' + source + ' from inst stage due to local changes',1)
+			continue;
+
+		## By default, apply properties to where the file is downloaded to via SVN
+		dest = source
+
+		if 'dest' in properties:
+			dest = properties['dest']
+			action = 'copy'
+
+			if 'action' in properties:
+				action = properties['action']
+
+			if not os.path.islink(dest):
+				chattr = subprocess.Popen(['chattr', '-i', dest],stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+				(stdoutdata, stderrdata) = chattr.communicate()
+				retcode = chattr.returncode
+
+				if retcode > 0:
+					output('Unable to remove immutable flag from ' + dest)
+
+			if action == 'copy':
+				try:
+					shutil.copyfile(source,dest)
+				except IOError as e:
+					output("Unable to copy from " + source + " to " + dest + ": " + str(e))
+					faultOccured = True
+					faultCode = 2
+
+			elif action == 'link':
+				try:
+					os.symlink(source,dest)
+				except (IOError, OSError) as e:
+					output("Unable to link " + source + " to " + dest + ": " + str(e))
+					faultOccured = True
+					faultCode = 2
+
+			elif action == 'linkr':
+				try:
+					if os.path.isdir(dest):
+						shutil.rmtree(dest)
+					elif os.path.isfile(dest):
+						os.unlink(dest)
+					os.symlink(source,dest)
+				except (IOError, OSError) as e:
+					output("Unable to linkr " + source + " to " + dest + ": " + str(e))
+					faultOccured = True
+					faultCode = 2
+
+			elif action == 'linko':
+				try:
+					if os.path.isfile(dest):
+						os.unlink(dest)
+					os.symlink(source,dest)
+				except (IOError, OSError) as e:
+					output("Unable to linko " + source + " to " + dest + ": " + str(e))
+					faultOccured = True
+					faultCode = 2
+
+		## chmod - set the permissions to octal mode
+		if 'chmod' in properties:
+			try:
+				os.chmod(dest,int(properties['chmod'],8))
+			except Exception as e:
+				output('Could not apply chmod property to ' + dest + ': ' + str(e))	
+				faultOccured = True
+				faultCode = 3			
+
+		## owner - set the owner to
+		if 'owner' in properties:
+			try:
+				pwd = pwd.getpwnam(properties['owner'])
+				uid = pwd[2]
+				os.chown(dest,uid)
+			except Exception as e:
+				output('Could not apply owner property to ' + dest + ': ' + str(e))
+				faultOccured = True
+				faultCode = 3			
+
+		## group - set the group to
+		if 'group' in properties:
+			try:
+				grp = grp.getgrnam(properties['group'])
+				gid = grp[2]
+				os.chown(dest,-1,gid)
+			except Exception as e:
+				output('Could not apply group property to ' + dest + ': ' + str(e))
+				faultOccured = True
+				faultCode = 3			
+
+		if 'uid' in properties:
+			try:
+				os.chown(dest,properties['uid'],-1)
+			except Exception as e:
+				output('Could not apply uid property to ' + dest + ': ' + str(e))
+				faultOccured = True
+				faultCode = 3
+
+		## group - set the group to
+		if 'gid' in properties:
+			try:
+				os.chown(dest,-1,properties['gid'])
+			except Exception as e:
+				output('Could not apply gid property to ' + dest + ': ' + str(e))
+				faultOccured = True
+				faultCode = 3
+
+		## immutable - set the file to immutable after
+		if 'immutable' in properties:
+			## NOTE although python has os.chflags, due to a python configure bug they
+			## are NEVER compiled in - stupid python.
+
+			if not os.path.islink(dest):
+				chattr = subprocess.Popen(['chattr', '+i', dest],stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+				(stdoutdata, stderrdata) = chattr.communicate()
+				retcode = chattr.returncode
+
+				if retcode > 0:
+					output(stdoutdata + "\n" + stderrdata)
+					faultOccured = True
+					faultCode = 3
+			else:
+				output('Not applying immutable attribute to symlink - not possible')
+
+	###### END INST-SECTION
+	###### BEGIN POST-SECTION
+
+	(scode,sout,serr) = runScript(pkg,'postinst')
+	if not scode == 0:
+		output('postinst script returned non-zero')
+		faultOccured = True
+		faultCode = 4
+
+	if upgrade:
+		## Pre-upgrade script
+		(scode,sout,serr) = runScript(pkg,'postup')
+		if not scode == 0:
+			output('postup script returned non-zero')
+			faultOccured = True
+			faultCode = 4
+	else:
+		## Post init script
+		(scode,sout,serr) = runScript(pkg,'postinit')
+		if not scode == 0:
+			output('postinit script returned non-zero')
+			faultOccured = True
+			faultCode = 4
+
+	###### END POST-SECTION
+
+	## Build metadata
+	pkgMeta = {
+					'name': pkg,
+					'revision': str(revisionToUse.number),
+					'desc': 'Fake desc'
+				}
+
+	## Convert metadata to json
+	jsonOut = json.dumps(pkgMeta, sort_keys=True, indent=4)
+
+	## Write the metadata
 	try:
-		pkg = json.loads(jsonData)
-	except (TypeError,ValueError) as e:
-		print 'Unable to understand data: ' + str(e)
+		f = open(os.path.join(scsroot,'packages',pkg,'conf','metadata.json'),'w')
+		f.write(jsonOut)
+		f.write("\n")
+		f.close()
+	except Exception as e:
+		fatal('Unable to write to ' + pkg + ' metadata file: ' + str(e))
+
+	## Output some info
+	verbose('Package ' + pkg + ' now at revision ' + str(revisionToUse.number),1)
+
+	if faultOccured:
+		output('An error occured during init')
+		return faultCode
 	else:
-		processPackage(pkg)
-
-################################################################################
-################################################################################
-
-def processPackagesFromJson(jsonData):
-	try:
-		pkgs = json.loads(jsonData)
-	except (TypeError,ValueError) as e:
-		print 'Unable to understand data: ' + str(e)
-
-	if type(pkgs).__name__=='list':
-		for pkg in pkgs:
-			processPackage(pkg)
-	else:
-		print 'uh oh - that was not a list!'
+		## Recursive call package if we're not at the latest now
+		if revisionToUse.number < latestRevision:
+			return initPkg(pkg)	
+		else:
+			verbose('Package ' + pkg + ' now up to date',1)
+			return 0
 
 ################################################################################
 ################################################################################
@@ -206,17 +558,16 @@ def main():
 
     Update functions:
 
-        check                      List available updates from channels
-        update                     Apply all updates from all channels
-        update        CHANNEL      Apply updates from a channel
-        upgrade       PACKAGE      Upgrade a specific package (Not recommended)
+T       check                      List available updates from channels
+T       update        CHANNEL      Apply updates from a channel
+T       update-all                 Apply all updates from all channels
 
     Basic package functions:
 
         installed                  List installed packages
         packages                   List all available packages
-        init          PACKAGE      Install a package
-        uninit        PACKAGE      Remove a package
+        init          PACKAGE      Install/upgrade package (Not recommended)
+        uninit        PACKAGE      Remove package (Not recommended)
 
     Package maintenance functions: 
 
@@ -227,26 +578,41 @@ def main():
         owner         FILEPATH     Determine if FILEPATH is owned by a package
 
     Channel-related actions:
-        subscribed                 List channels this system is subscribed to
+T       subscribed                 List channels this system is subscribed to
         channels                   List all available channels 
-        subscribe     CHANNEL      Subscribe to a channel
-        unsubscribe   CHANNEL      Unsubscribe from a channel'''
+T       subscribe     CHANNEL      Subscribe to a channel
+T       unsubscribe   CHANNEL      Unsubscribe from a channel
+
+    Other actions:
+        bootstrap                  Set up SCS according to the defaults'''
 
 	## Set a 'good' working directory
 	os.chdir('/tmp')
 
 	#### COMMAND LINE PARSER
 	parser = OptionParser(usage=usage,version='%prog version 2')
+	parser.add_option('-v',dest='verboseLevel',action="count",help='Set verbose level, use multiple times to increase verbosity')
 	parser.add_option('-c','--config-file',dest='config',default="/etc/scs.conf",help='Set the configuration file to use')
 	parser.add_option('-f','--force',dest='ignore',default=False,action="store_true",help='Ignore local changes and proceed anyway')
 	group = OptionGroup(parser,"Options for 'init'")
 	group.add_option('-r','--revision',type="int",default=-1,dest='revision',help='Specify a specific revision of the package to tag')
 	parser.add_option_group(group)
+
+	global options
+	global args
 	(options, args) = parser.parse_args()
+
+	#### VERBOSITY
+	global verboseLevel
+	verboseLevel = options.verboseLevel
 
 	#### LOAD CONFIG
 	config = ConfigParser.RawConfigParser()
 	config.read(options.config)
+
+	global scsroot
+	global svnroot
+	global metaurl
 
 	scsroot = '/opt/scs/'
 	svnroot = ''
@@ -256,46 +622,32 @@ def main():
 		configValue = config.get('client','scs root')
 		if os.path.isdir(configValue):
 			scsroot = configValue
+			verbose('Setting scsroot to ' + configValue,3)
 		else:
-			print >> sys.stderr, 'The scs root specified in ' + options.config + ' is not a directory'
-			sys.exit(1)
+			fatal('The scs root specified in ' + options.config + ' is not a directory')
 
 	if config.has_option('client','svn root'):
 		svnroot = config.get('client','svn root')
 	else:
-		print 'No svn root defined in ' + options.config
-		sys.exit(1)
+		fatal('No svn root defined in ' + options.config)
 
 	if config.has_option('client','metadata url'):
 		metaurl = config.get('client','metadata url')
 	else:
-		print 'No metadata url defined in ' + options.config
-		sys.exit(1)
+		fatal('No metadata url defined in ' + options.config)
 
 	#### SWTICH ACTIONS
 	if len(args) < 1:
 		parser.print_help()
 	else:
 		action = args[0]
-		svnclient = pysvn.Client()
 
 ################################################################################
 
 		if action == 'installed':
 			pkgs = os.listdir(os.path.join(scsroot,'packages'))
-
 			for pkg in pkgs:
-				try:
-					f = open(os.path.join(scsroot,'packages',pkg,'conf','metadata.json'), 'r')
-					jsonData = f.read()
-					f.close()
-				except IOError as e:
-					print 'Unable to read from ' + e.filename + ': ' + e.strerror
-					sys.exit(1)
-
-				processPackageFromJson(jsonData)
-
-			## TODO reformat output?
+				printPkgInfo(pkg)
 
 ################################################################################
 
@@ -305,54 +657,71 @@ def main():
 			for pkgName in metadict['packages']:
 				pkg = metadict['packages'][pkgName]
 				if pkg.has_key('name'):
-					print str(pkg['name'])
+					print(pkg['name'])
 
-			## TODO reformat output?
+				## TODO add latest revision by querying it?
 
 ################################################################################
 
-		elif action == 'verify':
+		elif action == 'verify' and len(args) == 2:
 			## Store package name in a friendly variable
 			pkg = args[1]
 
-			if packageInstalled(scsroot,pkg):
+			if packageInstalled(pkg):
 				dataPath = os.path.join(scsroot,'packages',pkg,'data')
-				checkForLocalChanges(scsroot,pkg)
+				checkForLocalChanges(pkg)
 			else:
-				print 'SCS: No such package'
-				sys.exit(1)
+				fatal('No such package')
 
 ################################################################################
 
 		elif action == 'verify-all':
 			pkgs = os.listdir(os.path.join(scsroot,'packages'))
 			for pkg in pkgs:
-				print 'SCS: Checking for local changes to pkg "' + pkg + '"'
-				checkForLocalChanges(scsroot,pkg)
+				output('Checking for local changes to pkg "' + pkg + '"')
+				checkForLocalChanges(pkg)
 
 ################################################################################
 
-		elif action == 'files':
+		elif action == 'files' and len(args) == 2:
 			pkg = args[1]
 
-			if packageInstalled(scsroot,pkg):
+			if packageInstalled(pkg):
 				dataPath = os.path.join(scsroot,'packages',pkg,'data')
-				listFiles(scsroot,pkg)
+				listFiles(pkg)
 			else:
-				print 'SCS: No such package'
-				sys.exit(1)
+				fatal('No such package')
 
 ################################################################################
 
 		elif action == 'files-all':
 			pkgs = os.listdir(os.path.join(scsroot,'packages'))
 			for pkg in pkgs:
-				print 'SCS: List files in pkg "' + pkg + '"'
-				listFiles(scsroot,pkg)
+				output(pkg + ':')
+				listFiles(pkg)
 
 ################################################################################
-		elif action == 'init' and len(args) == 2:
 
+		elif action == 'owner' and len(args) == 2:
+			f = args[1]
+			svnclient = pysvn.Client()
+			pkgs = os.listdir(os.path.join(scsroot,'packages'))
+			for pkg in pkgs:
+				propList = svnclient.proplist(os.path.join(scsroot,'packages',pkg,'data'),recurse=True)
+
+				for propSet in propList:
+					source     = propSet[0]
+					properties = propSet[1]
+
+					if 'dest' in properties:
+						dest = properties['dest']
+
+						if dest == f:
+							print pkg
+
+#################################################################################
+
+		elif action == 'init' and len(args) == 2:
 			## Store package name in a friendly variable
 			pkg = args[1]
 
@@ -367,237 +736,16 @@ def main():
 
 			## Catch errors
 			if not found:
-				print 'No such package'
-				sys.exit(1)
+				fatal('No such package on server')
 
-			## Work out paths
-			remotePath   = svnroot + '/p_' + pkg + '/' 
-			localPath    = os.path.join(scsroot,'packages',pkg)
-			localScripts = os.path.join(localPath,'scripts')
-			localData    = os.path.join(localPath,'data')
-			
-			## Get latest remote revision
-			infoList = svnclient.info2(remotePath,recurse=False)
-			for infoTuple in infoList:
-				infoDict = infoTuple[1]
-				latestRevision = infoDict['rev'].number
-
-			## Get local revision installed
-			infoList = svnclient.info2(localData,recurse=False)
-			for infoTuple in infoList:
-				infoDict = infoTuple[1]
-				localRevision = infoDict['rev'].number
-
-			if localRevision == latestRevision:
-				print 'SCS: Already up to date'
-				revisionToUse = pysvn.Revision(pysvn.opt_revision_kind.head)
-				#return 1
-			else:
-				revisionToUse = pysvn.Revision(pysvn.opt_revision_kind.number, int(localRevision) + 1)
-
-			## TODO FUTURE get revprop to see if we should skip this revision or not
-
-			## What type, init or upgrade?
-			upgrade = False
-
-			## A list of files to ignore during property-apply phase
-			ignoreList = []
-
-			## If this is an upgrade
-			if os.path.exists(localPath):
-				upgrade = True
-				print 'SCS: Upgrading ' + pkg
-
-				## Should we ignore local changes?
-				ignore = options.ignore
-
-				## If we shouldn't then check for local changes
-				if not ignore:
-					print 'SCS: Checking for local changes'			
-					ignoreList = checkForLocalChanges(scsroot,pkg)
-
-				## Pre-increment ("pre-upgrade") script
-				(scode,sout,serr) = runScript(scsroot,pkg,'preinc')
-				if scode > 0:
-					print 'SCS: preinc script returned non-zero, cancelling pkg init'
-					return 1
-				
-			else:
-				print 'SCS: Installing ' + pkg
-
-				## set up directory layout
-				try:
-					os.mkdir(localPath)
-					os.mkdir(os.path.join(localPath,'conf'))
-					os.mkdir(os.path.join(localPath,'scripts'))
-					os.mkdir(os.path.join(localPath,'data'))
-				except (OSError, IOError) as error:
-					print 'Failed to init package. Error was: ' + error.strerror + ' on ' + error.filename
-					sys.exit(0)
-	
-			print 'SCS: Deploying scripts'
-			print remotePath + 'scripts'
-			print localScripts
-			print revisionToUse.number
-			svnclient.export(remotePath + 'scripts',localScripts,revision=revisionToUse,force=True,recurse=True)
-
-			## If initial init, use "checkout", if not, use "update"
-			if upgrade:
-				print 'SCS: Updating package data'
-				svnclient.update(localData,revision=revisionToUse)
-			else:
-				print 'SCS: Deploying package data'
-				svnclient.checkout(remotePath + 'data',localData,revision=revisionToUse)
-
-			## Run scripts
-			if upgrade:
-				(scode,sout,serr) = runScript(scsroot,pkg,'preup')
-				if scode > 0:
-					print 'SCS: preup script returned non-zero, cancelling pkg init'
-					return 1
-			else:
-				(scode,sout,serr) = runScript(scsroot,pkg,'preinit')
-				if scode > 0:
-					print 'SCS: preinc script returned non-zero, cancelling pkg init'
-					return 1
-
-			(scode,sout,serr) = runScript(scsroot,pkg,'preinst')
-			if scode > 0:
-				print 'SCS: preinc script returned non-zero, cancelling pkg init'
-				return 1
-
-			## Get properties
-			propList = svnclient.proplist(localData,recurse=True)
-
-			for propSet in propList:
-				source     = propSet[0]
-				properties = propSet[1]
-
-				## Skip files marked as "skip" during check for local changes phase
-				if source in ignoreList:
-					print 'Skipping file ' + source + ' from inst stage due to local changes'
-					continue;
-
-				## Core properties
-				## dest - file location to copy/link/hardlink to, e.g. /etc/openldap.conf - implies preserve
-
-				## By default, apply properties to where the file is downloaded to via SVN
-				dest = source
-
-				#print '----------'
-				#print 'source is ' + source
-
-				if 'dest' in properties:
-					dest = properties['dest']
-					action = 'copy'
-
-
-					#print 'dest is ' + dest
-
-					if 'action' in properties:
-						action = properties['action']
-
-					#print 'mode is ' + action
-
-					chattr = subprocess.Popen(['chattr', '-i', dest],stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-					(stdoutdata, stderrdata) = chattr.communicate()
-					retcode = chattr.returncode
-					## TODO errors ^
-
-					if action == 'copy':
-						## copy the file
-						try:
-							shutil.copyfile(source,dest)
-						except IOError as e:
-							print "Unable to copy from " + source + " to " + dest + ": " + str(e)
-
-					elif action == 'link':
-						try:
-							os.symlink(source,dest)
-						except (IOError, OSError) as e:
-							print "Unable to link " + source + " to " + dest + ": " + str(e)
-
-					elif action == 'linkr':
-						try:
-							if os.path.isdir(dest):
-								shutil.rmtree(dest)
-							elif os.path.isfile(dest):
-								os.unlink(dest)
-							os.symlink(source,dest)
-						except (IOError, OSError) as e:
-							print "Unable to linkr " + source + " to " + dest + ": " + str(e)
-
-					elif action == 'linko':
-						try:
-							if os.path.isfile(dest):
-								os.unlink(dest)
-							os.symlink(source,dest)
-						except (IOError, OSError) as e:
-							print "Unable to linko " + source + " to " + dest + ": " + str(e)
-
-				## chmod - set the permissions to octal mode
-				if 'chmod' in properties:
-					print "\t" + properties['chmod']
-					os.chmod(dest,int(properties['chmod'],8))
-					## TODO exceptions
-
-				## owner - set the owner to
-				if 'owner' in properties:
-					pwd = pwd.getpwnam(properties['owner'])
-					uid = pwd[2]
-					os.chown(dest,uid)
-					## TODO exceptions
-
-				## group - set the group to
-				if 'group' in properties:
-					grp = grp.getgrnam(properties['group'])
-					gid = grp[2]
-					os.chown(dest,-1,gid)
-					## TODO exceptions
-
-				if 'uid' in properties:
-					os.chown(dest,properties['uid'],-1)
-					## TODO exceptions
-
-				## group - set the group to
-				if 'gid' in properties:
-					os.chown(dest,-1,properties['gid'])
-					## TODO exceptions
-
-				## immutable - set the file to immutable after
-				if 'immutable' in properties:
-					## NOTE although python has os.chflags, due to a python configure bug they
-					## are NEVER compiled in - stupid python.
-
-					chattr = subprocess.Popen(['chattr', '+i', dest],stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-					(stdoutdata, stderrdata) = chattr.communicate()
-					retcode = chattr.returncode
-					## TODO errors ^
-
-					if retcode > 0:
-						print stdoutdata, stderrdata
-
-			runScript(scsroot,pkg,'postinst')
-			## TODO RESULTACT if the above returns a non-zero then warnings are printed!
-
-			if upgrade:
-				## Pre-upgrade script
-				runScript(scsroot,pkg,'postup')
-				## TODO RESULTACT if the above returns a non-zero then warnings are printed!
-			else:
-				## Post init script
-				runScript(scsroot,pkg,'postinit')
-				## TODO RESULTACT if the above returns a non-zero then warnings are printed!
-
-			## TODO output from commands?/copies?
-
-			## TODO Update meta??
-				## write name and revision to metadata.json???
+			initPkg(pkg)
 
 ################################################################################
 
-		elif action == 'uninit':
-			print 'todo'
+		elif action == 'uninit' and len(args) == 2:
+			pkg = args[1]
+			if packageInstalled(pkg):
+				uninitPkg(pkg)
 
 ################################################################################
 
@@ -614,14 +762,68 @@ def main():
 		elif action == 'subscribed':
 			print 'todo'
 
+			## easy peasy. see "installed" for example.
+
 ################################################################################
 
-		elif action == 'subscribe':
-			print 'todo'
+		elif action == 'subscribe' and len(args) == 2:
+			channel    = args[1]
+			remotePath = svnroot + '/c_' + channel + '/'
+			localPath  = os.path.join(scsroot,'channels',channel)
+			localPkgs  = os.path.join(localPath,'packages')
+			svnclient = pysvn.Client()
+
+			if channelSubscribed(channel):
+				fatal("Already subscribed")
+			else:
+
+				## set up directory layout
+				try:
+					os.mkdir(localPath)
+					os.mkdir(localPkgs)
+				except (OSError, IOError) as error:
+					print 'Failed to subscribe to channel. Error was: ' + error.strerror + ' on ' + error.filename
+					sys.exit(0)
+
+				## Download package information
+				svnclient.checkout(remotePath + 'packages',localPkgs)
+
+				## Now do a property walk to know what packages to install
+				
+			## Go through "packages" and call init with specific version!
 
 ################################################################################
 
 		elif action == 'unsubscribe':
+			print 'todo'
+
+			## Go through channel SVN and remove packages (call uninit that is)
+
+################################################################################
+
+		elif action == 'check':
+			print 'todo'
+
+			## Check local channel version against remote
+			## print channels which need to be updated
+
+################################################################################
+
+		elif action == 'update' and len(args) == 2:
+			print 'todo'
+
+			## update channel.
+			## apply action in "upgrade" file.
+			## goto 10 if needed.
+
+		elif action == 'update-all':
+			print 'todo'
+
+			## as above, but for all channels
+
+################################################################################
+
+		elif action == 'upgrade':
 			print 'todo'
 
 ################################################################################
