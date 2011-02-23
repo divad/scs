@@ -337,11 +337,16 @@ def main():
 			sys.exit(1)
 
 		if not metadict['packages'].has_key(packageName):
-			print "Sorry, that channel does not exist!"
+			print "Sorry, that package does not exist!"
 			sys.exit(1)
 
 		## Make sure channel is up-to-date
 		svnclient.update(os.path.join(chancodir,'c_' + channelName))
+
+		## is this pkg already tagged? Check the packages/ dir
+		if not os.path.isfile(pkgConfigFile):
+			print 'The package is not tagged to the channel'
+			sys.exit(0)
 
 		try:
 			### Remove all previous properties on the upgrade file if it exists
@@ -355,9 +360,8 @@ def main():
 				svnclient.add(pkgUpgradeFile)
 
 			## Delete channel/packages/packageName
-			if not os.path.isfile(pkgConfigFile):
-				os.unlink(pkgConfigFile)
-				svnclient.remove(pkgConfigFile)
+			os.unlink(pkgConfigFile)
+			svnclient.remove(pkgConfigFile)
 
 			## Set the upgrade properties to remove the package
 			svnclient.propset('name',packageName,pkgUpgradeFile)

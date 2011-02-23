@@ -16,8 +16,10 @@ from optparse import OptionParser, OptionGroup
 import fcntl
 
 #### TODO TODO TODO TODO
-# TODO - different output formats (csv? xml? json?)
-# TODO log runScripts? print in verbose mode??
+# TODO bootstrap?? maybe.
+# TODO log runScripts? print in verbose mode?						IMPORTANT
+# TODO pause channel??												IMPORTANT
+# TODO Use revprop for skipping channel or package revisions?		FUTURE VERSION
 
 ################################################################################
 ################################################################################
@@ -154,7 +156,7 @@ def shasum(filePath,blocksize=2**20):
 
 def runScript(pkgName,scriptName):
 	global scsroot
-	verbose('SCS: Executing ' + scriptName,2)
+	verbose('Executing ' + scriptName,2)
 	scriptPath = os.path.join(scsroot,'packages',pkgName,'scripts',scriptName)
 
 	## CHMOD First
@@ -224,31 +226,93 @@ def uninitPkg(pkg):
 ################################################################################
 ################################################################################
 
-## TODO
+# results
+# 0 OK!
+# 1 Could not upgrade
 def updateChannel(channel):
+	verbose('updateChannel() called',5)
+
+	svnclient = pysvn.Client()
+
 	if channelSubscribed(channel):	
-		remotePath = svnroot + '/c_' + channel + '/'
-		localPath  = os.path.join(scsroot,'channels',channel)
-		localPkgs  = os.path.join(localPath,'packages')
-		svnclient = pysvn.Client()
-		svnclient.update(localPkgs)
+		remotePath  = svnroot + '/c_' + channel + '/'
+		localPath   = os.path.join(scsroot,'channels',channel)
+		localPkgs   = os.path.join(localPath,'packages')
+		upgradeFile = remotePath + 'upgrade'
 
 		## Get the latest revision of the channel
+		infoList = svnclient.info2(remotePath,recurse=False)
+		for infoTuple in infoList:
+			infoDict = infoTuple[1]
+			latestRevision = infoDict['rev']
 
-		## Decide upon which revision to go to
+		verbose('updateChannel: Latest remote revision is ' + str(latestRevision.number),5)
 
-		## Get the "upgrade" file for this revision
-		svnclient.checkout(remotePath + 'upgrade',os.path.join(localPath,'upgrade'))
+		## Get the installed revision
+		infoList = svnclient.info2(localPkgs,recurse=False)
+		for infoTuple in infoList:
+			infoDict = infoTuple[1]
+			localRevision = infoDict['rev']
 
-		## Get contents of upgrade file
+		verbose('updateChannel: Latest local revision is ' + str(localRevision.number),5)
 
-		## Do what it says!
+		## Decide upon which revision to go to????
+		if localRevision.number == latestRevision.number:
+			output('Channel "' + channel + '" is up to date')
+			return
+		else:
+			revisionToUse = pysvn.Revision(pysvn.opt_revision_kind.number, localRevision.number + 1)
+
+		## No need to download the upgrade file, we'll just read its properties from remote :)
+		## Get the properties
+		propList = svnclient.proplist(upgradeFile,revision=revisionToUse)
+
+		for propSet in propList:
+			properties = propSet[1]
+
+			if properties.has_key('name') and properties.has_key('revision') and properties.has_key('action'):
+				if properties['action'] == 'install':
+					## Install 'revision' of 'name'
+					result = initPkg(properties['name'],int(properties['revision']))
+
+					## Result of pkgInit
+					if result > 0:
+						if result == 1:
+							## Failed to init package, thus the channel upgrade has failed!
+							fatal("Could not upgrade channel. Please correct the error and try to upgrade again")
+							return 1
+						else:
+							print 'blargh'
+							## Channel subscribed...but there were problems. TODO PAUSE CHANNEL?
+
+			elif properties.has_key('name') and properties.has_key('action'):
+				if properties['action'] == 'remove':
+					## Remove 
+					result = uninitPkg(properties['name'])
+
+					if result == 1:
+						fatal("Could not upgrade channel. Please correct the error and try to upgrade again")
+						return 1
+					
+			else:
+				verbose('Warning! Channel upgrade file does not have properties set against it!',1)
+
+		## Update packages (Although we don't actually use them until an unsubscribe - but they are there if an admin wants them)
+		## NOTE! Updating this means SCS will think the channel is updated, hence why we do it here.
+		svnclient.update(localPkgs,revision=revisionToUse)
+
+		## TODO save meta? Then use meta to know what the local revision is? DUH...
+
+		## We're upgraded
+		if revisionToUse.number < latestRevision:
+			## We need to recursive-call and upgrade again! :)
+			updateChannel(channel)
+		else:
+			## We're done!
+			return 0
 
 	else:
 		fatal('Not subscribed to channel ' + channel)
-
-			## apply action in "upgrade" file.
-			## goto 10 if needed.
 
 ################################################################################
 ################################################################################
@@ -587,8 +651,8 @@ def main():
     Update functions:
 
         check                      List available updates from channels
-T       update        CHANNEL      Apply updates from a channel
-T       update-all                 Apply all updates from all channels
+        update        CHANNEL      Apply updates from a channel
+        update-all                 Apply all updates from all channels
 
     Basic package functions:
 
@@ -999,17 +1063,13 @@ T       bootstrap                  Set up SCS according to the defaults'''
 ################################################################################
 
 		elif action == 'update' and len(args) == 2:
-			print 'TODO'
-
-			## if subscribed...
-			## update channel svn.
-			## apply action in "upgrade" file.
-			## goto 10 if needed.
+			channel = args[1]
+			updateChannel(channel)
 
 		elif action == 'update-all':
-			print 'TODO'
-
-			## as above, but for all channels
+			channels = os.listdir(os.path.join(scsroot,'channels'))
+			for channel in channels:
+				updateChannel(channel)
 
 ################################################################################
 
