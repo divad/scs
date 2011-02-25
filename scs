@@ -14,21 +14,32 @@ import hashlib
 import ConfigParser
 from optparse import OptionParser, OptionGroup
 import fcntl
+import logging
 
-#### TODO TODO TODO TODO
-# TODO bootstrap?? maybe.
-# TODO log runScripts? print in verbose mode?						IMPORTANT
-# TODO pause channel??												IMPORTANT
-# TODO Use revprop for skipping channel or package revisions?		FUTURE VERSION
+## TODO
+# bootstrap
+# pause channel??
+## ROADMAP
+# 
+# Version 4
+# - Logging
+# - Email
+# - revprop
+# Version 5
+# - ...
 
 ################################################################################
 ################################################################################
 
-def verbose(o,verbosity):
+def verbose(o,verbosity,log=True):
 	global verboseLevel
+	global log
 
 	if verboseLevel >= verbosity:
 		print 'SCS: ' + str(o)
+
+	if log:
+		
 
 ################################################################################
 ################################################################################
@@ -170,7 +181,7 @@ def runScript(pkgName,scriptName):
 	try:
 		script = subprocess.Popen([scriptPath],stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 		(stdoutdata, stderrdata) = script.communicate()
-		return (script.returncode, stdoutdata, stderrdata)
+		return (script.returncode, stdoutdata)
 	except OSError as e:
 		## UNIX codes will only ever be 0-255
 		## Thus use -1 to signify an OS error
@@ -203,8 +214,9 @@ def uninitPkg(pkg):
 	global scsroot
 
 	if packageInstalled(pkg):
-		(scode,sout,serr) = runScript(pkg,'uninit')
+		(scode,sout) = runScript(pkg,'uninit')
 		if not scode == 0:
+			output(sout)
 			output('Script "uninit" returned non-zero')
 			return 1
 		else:
@@ -383,8 +395,9 @@ def initPkg(pkg,rev=-1):
 			ignoreList = checkForLocalChanges(pkg)
 
 		## Pre-increment ("pre-upgrade") script
-		(scode,sout,serr) = runScript(pkg,'preinc')
+		(scode,sout) = runScript(pkg,'preinc')
 		if not scode == 0:
+			output(sout)
 			output('preinc script returned non-zero, cancelling pkg init')
 			return 1
 
@@ -422,18 +435,21 @@ def initPkg(pkg,rev=-1):
 
 	## Run scripts
 	if upgrade:
-		(scode,sout,serr) = runScript(pkg,'preup')
+		(scode,sout) = runScript(pkg,'preup')
 		if not scode == 0:
+			output(sout)
 			output('Script "preup" returned non-zero, cancelling pkg init')
 			return 1
 	else:
-		(scode,sout,serr) = runScript(pkg,'preinit')
+		(scode,sout) = runScript(pkg,'preinit')
 		if not scode == 0:
+			output(sout)
 			output('Script "preinc" returned non-zero, cancelling pkg init')
 			return 1
 
-	(scode,sout,serr) = runScript(pkg,'preinst')
+	(scode,sout) = runScript(pkg,'preinst')
 	if not scode == 0:
+		output(sout)
 		output('Script "preinst" returned non-zero, cancelling pkg init')
 		return 1
 
@@ -573,7 +589,7 @@ def initPkg(pkg,rev=-1):
 				retcode = chattr.returncode
 
 				if retcode > 0:
-					output(stdoutdata + "\n" + stderrdata)
+					output(stdoutdata)
 					faultOccured = True
 					faultCode = 3
 			else:
@@ -582,23 +598,26 @@ def initPkg(pkg,rev=-1):
 	###### END INST-SECTION
 	###### BEGIN POST-SECTION
 
-	(scode,sout,serr) = runScript(pkg,'postinst')
+	(scode,sout) = runScript(pkg,'postinst')
 	if not scode == 0:
+		output(sout)
 		output('postinst script returned non-zero')
 		faultOccured = True
 		faultCode = 4
 
 	if upgrade:
 		## Pre-upgrade script
-		(scode,sout,serr) = runScript(pkg,'postup')
+		(scode,sout) = runScript(pkg,'postup')
 		if not scode == 0:
+			output(sout)
 			output('postup script returned non-zero')
 			faultOccured = True
 			faultCode = 4
 	else:
 		## Post init script
-		(scode,sout,serr) = runScript(pkg,'postinit')
+		(scode,sout) = runScript(pkg,'postinit')
 		if not scode == 0:
+			output(sout)
 			output('postinit script returned non-zero')
 			faultOccured = True
 			faultCode = 4
@@ -682,7 +701,7 @@ T       bootstrap                  Set up SCS according to the defaults'''
 	os.chdir('/tmp')
 
 	#### COMMAND LINE PARSER
-	parser = OptionParser(usage=usage,version='%prog version 2')
+	parser = OptionParser(usage=usage,version='%prog version 3')
 	parser.add_option('-v',dest='verboseLevel',action="count",help='Set verbose level, use multiple times to increase verbosity')
 	parser.add_option('-c','--config-file',dest='config',default="/etc/scs.conf",help='Set the configuration file to use')
 	parser.add_option('-f','--force',dest='ignore',default=False,action="store_true",help='Ignore local changes and proceed anyway')
@@ -714,19 +733,18 @@ T       bootstrap                  Set up SCS according to the defaults'''
 		configValue = config.get('client','scs root')
 		if os.path.isdir(configValue):
 			scsroot = configValue
-			verbose('Setting scsroot to ' + configValue,3)
 		else:
 			fatal('The scs root specified in ' + options.config + ' is not a directory')
 
 	if config.has_option('client','svn root'):
 		svnroot = config.get('client','svn root')
 	else:
-		fatal('No svn root defined in ' + options.config)
+		fatal('No svn root defined in ' + options.config,log=False)
 
 	if config.has_option('client','metadata url'):
 		metaurl = config.get('client','metadata url')
 	else:
-		fatal('No metadata url defined in ' + options.config)
+		fatal('No metadata url defined in ' + options.config,log=False)
 
 	#### LOCK AND LOAD METADATA
 	## Open metadata file, lock it, and read contents
@@ -739,14 +757,14 @@ T       bootstrap                  Set up SCS according to the defaults'''
 		metadataFile = open(metadataPath,'r+')
 		fcntl.flock(metadataFile,fcntl.LOCK_EX)
 	except (IOError, OSError) as e:
-		fatal('Unable to lock ' + str(e.filename) + ': ' + str(e.strerror))
+		fatal('Unable to lock ' + str(e.filename) + ': ' + str(e.strerror),False)
 
 	try:
 		jsonData = metadataFile.read()
 		metadataFile.seek(0)
 	except (IOError, OSError) as e:
 		fcntl.flock(metadataFile,fcntl.LOCK_UN)
-		fatal('Unable to read from ' + e.filename + ': ' + e.strerror)
+		fatal('Unable to read from ' + e.filename + ': ' + e.strerror,False)
 
 	global metadataDict
 
@@ -759,7 +777,7 @@ T       bootstrap                  Set up SCS according to the defaults'''
 			metadataDict = json.loads(jsonData)
 		except (TypeError,ValueError) as e:
 			fcntl.flock(metadataFile,fcntl.LOCK_UN)
-			fatal('Unable to understand metadata: ' + str(e))
+			fatal('Unable to understand metadata: ' + str(e),False)
 
 	#### SWTICH ACTIONS
 	if len(args) < 1:
