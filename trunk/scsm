@@ -31,7 +31,7 @@ def main():
         chan-create   NAME         Create a channel
         chan-delete   NAME         Deletes a channel
         chan-list                  Lists all channels
-        chan-info     NAME         Show channel contents
+T       chan-info     NAME         Show channel contents
 	  
     Other actions:
         tag           CHANNEL PACKAGE
