@@ -15,60 +15,103 @@ import ConfigParser
 from optparse import OptionParser, OptionGroup
 import fcntl
 import logging
+import logging.handlers
 
 ## TODO
-# LOGS
 # FAULT RESPONSE
-
 # bootstrap command?
-
 # - revprop??
+# description truncate?
+# new actions "pkg-info" and "chan-info" ?
 
 def saveMetadata():
 	global metadataDict
 	global metadataFile
+	
+	if not metadataDict == None:
+		#### save metadata changes to disk
+		## Turn "metadict" into json
+		jsonOut = json.dumps(metadataDict, sort_keys=True, indent=4)
 
-	#### save metadata changes to disk
-	## Turn "metadict" into json
-	jsonOut = json.dumps(metadataDict, sort_keys=True, indent=4)
-
-	## Write to file
-	try:
-		metadataFile.seek(0)
-		metadataFile.truncate(0)
-		metadataFile.write(jsonOut)
-		metadataFile.close
-	except (IOError, OSError) as e:
-		sys.stderr.write('Failed to write client metadata: ' + e.strerror + ' on ' + e.filename)
-		sys.exit(255)
+		## Write to file
+		try:
+			metadataFile.seek(0)
+			metadataFile.truncate(0)
+			metadataFile.write(jsonOut)
+			metadataFile.close
+		except (IOError, OSError) as e:
+			sys.stderr.write('Failed to write client metadata: ' + e.strerror + ' on ' + e.filename)
+			sys.exit(255)
 
 ################################################################################
 ################################################################################
 
-def debug(o):
+def openLog(logfile):
+	global logOpened
+	global logger
+
+	logger = logging.getLogger('scs')
+	logger.setLevel(logging.DEBUG)
+	handler = logging.handlers.RotatingFileHandler(logfile, maxBytes=512000, backupCount=5)
+	formatter = logging.Formatter("%(asctime)s %(name)s %(levelname)s: %(message)s")
+	handler.setFormatter(formatter)
+	logger.addHandler(handler)
+	logOpened = True
+
+def debug(o,log=False):
 	global options
-
+	global logOpened
+	global logger
+	
 	if not options.quiet:
 		if options.debug:
 			print str(o)
+			
+	if log and logOpened:
+		logger.debug(str(o))
 
-def warn(o):
+def warn(o,log=True):
 	global options
-
+	global logOpened
+	global logger	
+	
 	if not options.quiet:
 		print str(o)
+		
+	if log and logOpened:
+		logger.warning(str(o))
 
-def error(o):
+def error(o,log=True):
+	global logOpened
+	global logger
 	sys.stderr.write(str(o) + "\n")
 	
-def info(o):
+	if log and logOpened:
+		logger.error(str(o))
+	
+def info(o,log=False):
 	global options
-
+	global logOpened
+	global logger
+	
 	if not options.quiet:
 		print str(o)
+		
+	if log and logOpened:
+		logger.info(str(o))
 
-def fatal(o,exitcode=1):
+def fatal(o,exitcode=1,log=True):
+	global logOpened
+	global logger
+	
+	## First save any metadata changes
 	saveMetadata()
+	
+	## Log the fault
+	if log and logOpened:
+		logger.critical(str(o))	
+	
+	## Panic and quit
 	sys.stderr.write('FATAL: ' + str(o) + "\n")
 	sys.exit(exitcode)
 
@@ -95,7 +138,7 @@ def checkForLocalChanges(pkg):
 		if 'dest' in properties:
 			dest = properties['dest']
 
-			debug('Checking for local changes on ' + dest)
+			debug('Checking for local changes on file: ' + dest,log=True)
 
 			## Get SHA sums
 			try:
@@ -107,7 +150,7 @@ def checkForLocalChanges(pkg):
 				## Compare sums
 				if not sourceh == desth:
 
-					info('The file ' + dest + ' has been modified outside of SCS control')
+					info('The file ' + dest + ' has been modified outside of SCS control',log=True)
 
 					## TODO FUTURE make the default come from a revprop?
 					checkAction = 'ignore'
@@ -115,7 +158,7 @@ def checkForLocalChanges(pkg):
 					if 'check' in properties:
 						checkAction = properties['check']
 
-					debug('The file has been configured to "' + checkAction + '" in this scenario')
+					debug('The file has been configured to "' + checkAction + '" in this scenario',log=True)
 
 					if checkAction == 'fail':
 						output("ERROR! Local changes found to file " + dest)
@@ -233,14 +276,14 @@ def shasum(filePath,blocksize=2**20):
 
 def runScript(pkgName,scriptName):
 	global scsroot
-	debug('Executing ' + scriptName)
+	debug('Executing ' + scriptName,log=True)
 	scriptPath = os.path.join(scsroot,'packages',pkgName,'scripts',scriptName)
 
 	## CHMOD First
 	os.chmod(scriptPath,stat.S_IRWXU)
 
 	if os.path.getsize(scriptPath) == 0:
-		debug("Script is empty; not executing")
+		debug("Script is empty; not executing",log=True)
 		return (0, '')
 
 	## Now run the script
@@ -298,7 +341,7 @@ def uninitPkg(pkg):
 			## Return OK
 			return 0
 	else:
-		info('Package "' + pkg + '" not installed so not removing')
+		info('Package "' + pkg + '" not installed so not removing',log=True)
 		return 0
 
 ################################################################################
@@ -323,11 +366,11 @@ def updateChannel(channel):
 		for infoTuple in infoList:
 			infoDict = infoTuple[1]
 			latestRevision = infoDict['rev']
-		debug('updateChannel: Latest remote revision is ' + str(latestRevision.number))
+		debug('Latest remote revision is ' + str(latestRevision.number))
 
 		## Get the installed revision
 		localRevision = int(metadataDict['channels'][channel]['revision'])
-		debug('updateChannel: Latest local revision is ' + str(localRevision))
+		debug('Latest local revision is ' + str(localRevision))
 
 		## Decide upon which revision to go to????
 		if localRevision == latestRevision.number:
@@ -394,7 +437,7 @@ def updateChannel(channel):
 			return 0
 
 	else:
-		fatal('Not subscribed to channel ' + channel)
+		fatal('Not subscribed to channel ' + channel,log=False)
 
 ################################################################################
 ################################################################################
@@ -480,14 +523,14 @@ def initPkg(pkg,rev=-1):
 
 		## TODO FUTURE get revprop to see if we should skip this revision or not
 
-		info('Upgrading ' + pkg + ' to revision ' + str(revisionToUse.number))
+		info('Upgrading ' + pkg + ' to revision ' + str(revisionToUse.number),log=True)
 
 		## Should we ignore local changes?
 		ignore = options.ignore
 
 		## If we shouldn't then check for local changes
 		if not ignore:
-			info('Checking for local changes')
+			info('Checking for local changes',log=True)
 			ignoreList = checkForLocalChanges(pkg)
 
 		## Pre-increment ("pre-upgrade") script
@@ -503,7 +546,7 @@ def initPkg(pkg,rev=-1):
 		
 	else:
 		revisionToUse = latestRevision
-		info('Installing ' + pkg)
+		info('Installing ' + pkg,log=True)
 
 		## Create paths only if they haven't been already
 		## This can happen if a pre* script failed
@@ -721,7 +764,7 @@ def initPkg(pkg,rev=-1):
 	###### END POST-SECTION
 
 	## Output some info
-	info('Package ' + pkg + ' now at revision ' + str(revisionToUse.number))
+	info('Package ' + pkg + ' now at revision ' + str(revisionToUse.number),log=True)
 
 	## update metadata
 	metadataDict['packages'][pkg] = { 'name': pkg, 'revision': revisionToUse.number, 'desc': packageDescription}
@@ -734,14 +777,17 @@ def initPkg(pkg,rev=-1):
 		if revisionToUse.number < latestRevision.number:
 			return initPkg(pkg)	
 		else:
-			info('Package ' + pkg + ' now up to date')
+			info('Package ' + pkg + ' now up to date',log=True)
 			return 0
 
 ################################################################################
 ################################################################################
 
 def main():
-	#### HELP TEXT FOR ACTIONS
+	## Load SVN client
+	svnclient = pysvn.Client()
+
+	#### Define the usage text
 	usage = '''Usage: %prog [options] ACTION [...]
 
     Update functions:
@@ -777,10 +823,18 @@ def main():
     Other actions:
 T       bootstrap                  Set up SCS according to the defaults'''
 
+	## Prepare the metadata dictionary (local)
+	global metadataDict
+	metadataDict = None
+	
+	## Log variable
+	global logOpened
+	logOpened = False
+
 	## Set a 'good' working directory
 	os.chdir('/tmp')
 
-	#### COMMAND LINE PARSER
+	#### Parse command line options
 	parser = OptionParser(usage=usage,version='%prog version 3')
 	parser.add_option('-c','--config-file',dest='config',default="/etc/scs.conf",help='Set the configuration file to use')
 	parser.add_option('-f','--force',dest='ignore',default=False,action="store_true",help='Ignore local changes and proceed anyway')
@@ -802,10 +856,17 @@ T       bootstrap                  Set up SCS according to the defaults'''
 	global svnroot
 	global metaurl
 
-	scsroot  = '/opt/scs/'
-	svnroot  = ''
-	metaurl  = ''
+	scsroot = '/opt/scs/'
+	svnroot = ''
+	metaurl = ''
 
+	## log file
+	if config.has_option('client','log file'):
+		openLog(config.get('client','log file'))
+	else:
+		openLog('/var/log/scs.log')
+	
+	## scs root
 	if config.has_option('client','scs root'):
 		configValue = config.get('client','scs root')
 		if os.path.isdir(configValue):
@@ -813,15 +874,16 @@ T       bootstrap                  Set up SCS according to the defaults'''
 		else:
 			fatal('The scs root specified in ' + options.config + ' is not a directory')
 
+	## svn root
 	if config.has_option('client','svn root'):
 		svnroot = config.get('client','svn root')
 	else:
-		fatal('No svn root defined in ' + options.config,log=False)
+		fatal('No svn root defined in ' + options.config)
 
 	if config.has_option('client','metadata url'):
 		metaurl = config.get('client','metadata url')
 	else:
-		fatal('No metadata url defined in ' + options.config,log=False)
+		fatal('No metadata url defined in ' + options.config)
 
 	#### LOCK AND LOAD METADATA
 	## Open metadata file, lock it, and read contents
@@ -835,16 +897,14 @@ T       bootstrap                  Set up SCS according to the defaults'''
 		metadataFile = open(metadataPath,'r+')
 		fcntl.flock(metadataFile,fcntl.LOCK_EX)
 	except (IOError, OSError) as e:
-		fatal('Unable to lock ' + str(e.filename) + ': ' + str(e.strerror),False)
+		fatal('Unable to lock ' + str(e.filename) + ': ' + str(e.strerror))
 
 	try:
 		jsonData = metadataFile.read()
 		metadataFile.seek(0)
 	except (IOError, OSError) as e:
 		fcntl.flock(metadataFile,fcntl.LOCK_UN)
-		fatal('Unable to read from ' + e.filename + ': ' + e.strerror,False)
-
-	global metadataDict
+		fatal('Unable to read from ' + e.filename + ': ' + e.strerror)
 
 	## Handle empty data
 	if len(jsonData) == 0:
@@ -855,7 +915,7 @@ T       bootstrap                  Set up SCS according to the defaults'''
 			metadataDict = json.loads(jsonData)
 		except (TypeError,ValueError) as e:
 			fcntl.flock(metadataFile,fcntl.LOCK_UN)
-			fatal('Unable to understand metadata: ' + str(e),False)
+			fatal('Unable to understand metadata: ' + str(e))
 
 	#### SWTICH ACTIONS
 	if len(args) < 1:
@@ -880,14 +940,33 @@ T       bootstrap                  Set up SCS according to the defaults'''
 
 		elif action == 'packages':
 			metadict = fetchMetadata(metaurl)
-
+			output = ''
 			for pkgName in metadict['packages']:
-				pkg = metadict['packages'][pkgName]
-				if pkg.has_key('name'):
-					print(pkg['name'])
+				data = metadict['packages'][pkgName]
+				if type(data).__name__=='dict':
+				
+					## Get the latest channel revision
+					remotePath  = svnroot + '/p_' + pkgName + '/'
 
-				## TODO add latest revision by querying it?
-				## TODO add description
+					## Get the latest revision of the package
+					infoList = svnclient.info2(remotePath,recurse=False)
+					for infoTuple in infoList:
+						infoDict = infoTuple[1]
+						latestRevision = infoDict['rev']
+				
+					if data.has_key('name') and data.has_key('desc'):
+						output += "{0:14}  {1:15}  {2:37}\n".format(str(data['name']), str(latestRevision.number), str(data['desc']))
+					elif data.has_key('name'):
+						output += "{0:14}  {1:15}  {2:37}\n".format(str(data['name']), str(latestRevision.number), 'N/A')
+					else:
+						fatal('Unable to understand data: ' + str(e))
+				else:
+					fatal('Unable to understand data: ' + str(e))
+
+			if len(output) > 0:
+				print '{0:14}  {1:15}  {2:37}'.format('PACKAGE NAME','LATEST REVISION','DESCRIPTION')
+				print '{0:14}  {1:15}  {2:37}'.format('------------','---------------','-----------')
+				sys.stdout.write(output)
 
 ################################################################################
 
@@ -911,7 +990,7 @@ T       bootstrap                  Set up SCS according to the defaults'''
 				else:
 					print '         Status: OK'
 			else:
-				fatal('Package not installed')
+				fatal('Package not installed',log=False)
 
 		elif action == 'suspend' and len(args) == 2:
 			## Store package name in a friendly variable
@@ -919,11 +998,11 @@ T       bootstrap                  Set up SCS according to the defaults'''
 
 			if packageInstalled(pkg):
 				if isPackageSuspended(pkg):
-					fatal('Package is already suspended')
+					fatal('Package is already suspended',log=False)
 				else:
 					suspendPackage(pkg,'Suspended by system administrator')
 			else:
-				fatal('Package not installed')
+				fatal('Package not installed',log=False)
 
 		elif action == 'resume' and len(args) == 2:
 			## Store package name in a friendly variable
@@ -933,9 +1012,9 @@ T       bootstrap                  Set up SCS according to the defaults'''
 				if isPackageSuspended(pkg):
 					resumePackage(pkg)
 				else:
-					fatal('Package is not suspended')
+					fatal('Package is not suspended',log=False)
 			else:
-				fatal('Package not installed')
+				fatal('Package not installed',log=False)
 
 		elif action == 'verify' and len(args) == 2:
 			## Store package name in a friendly variable
@@ -945,7 +1024,7 @@ T       bootstrap                  Set up SCS according to the defaults'''
 				dataPath = os.path.join(scsroot,'packages',pkg,'data')
 				checkForLocalChanges(pkg)
 			else:
-				fatal('Package not installed')
+				fatal('Package not installed',log=False)
 
 		elif action == 'verify' and len(args) == 2:
 			## Store package name in a friendly variable
@@ -955,7 +1034,7 @@ T       bootstrap                  Set up SCS according to the defaults'''
 				dataPath = os.path.join(scsroot,'packages',pkg,'data')
 				checkForLocalChanges(pkg)
 			else:
-				fatal('Package not installed')
+				fatal('Package not installed',log=False)
 
 ################################################################################
 
@@ -988,7 +1067,6 @@ T       bootstrap                  Set up SCS according to the defaults'''
 
 		elif action == 'owner' and len(args) == 2:
 			f = args[1]
-			svnclient = pysvn.Client()
 			pkgs = os.listdir(os.path.join(scsroot,'packages'))
 			for pkg in pkgs:
 				propList = svnclient.proplist(os.path.join(scsroot,'packages',pkg,'data'),recurse=True)
@@ -1035,11 +1113,33 @@ T       bootstrap                  Set up SCS according to the defaults'''
 
 		elif action == 'channels':
 			metadict = fetchMetadata(metaurl)
-
+			output = ''
 			for cName in metadict['channels']:
-				channel = metadict['channels'][cName]
-				if channel.has_key('name'):
-					print str(channel['name'])
+				data = metadict['channels'][cName]
+				if type(data).__name__=='dict':
+				
+					## Get the latest channel revision
+					remotePath  = svnroot + '/c_' + cName + '/'
+
+					## Get the latest revision of the package
+					infoList = svnclient.info2(remotePath,recurse=False)
+					for infoTuple in infoList:
+						infoDict = infoTuple[1]
+						latestRevision = infoDict['rev']
+				
+					if data.has_key('name') and data.has_key('desc'):
+						output += "{0:14}  {1:15}  {2:37}\n".format(str(data['name']), str(latestRevision.number), str(data['desc']))
+					elif data.has_key('name'):
+						output += "{0:14}  {1:15}  {2:37}\n".format(str(data['name']), str(latestRevision.number), 'N/A')
+					else:
+						fatal('Unable to understand data: ' + str(e))
+				else:
+					fatal('Unable to understand data: ' + str(e))
+
+			if len(output) > 0:
+				print '{0:14}  {1:15}  {2:37}'.format('CHANNEL NAME','LATEST REVISION','DESCRIPTION')
+				print '{0:14}  {1:15}  {2:37}'.format('------------','---------------','-----------')
+				sys.stdout.write(output)					
 
 ################################################################################
 
@@ -1069,7 +1169,6 @@ T       bootstrap                  Set up SCS according to the defaults'''
 			remotePath = svnroot + '/c_' + channel + '/'
 			localPath  = os.path.join(scsroot,'channels',channel)
 			localPkgs  = os.path.join(localPath,'packages')
-			svnclient = pysvn.Client()
 
 			## Get package info from server
 			metadict = fetchMetadata(metaurl)
@@ -1161,7 +1260,7 @@ T       bootstrap                  Set up SCS according to the defaults'''
 				metadataDict['channels'][channel] = { 'name': channel, 'revision': localRevision, 'desc' : channelDescription}
 
 				## Output
-				info('Subscribed to channel ' + channel + ' - at revision ' + str(localRevision))
+				info('Subscribed to channel ' + channel + ' - at revision ' + str(localRevision),log=True)
 
 ################################################################################
 
@@ -1169,10 +1268,9 @@ T       bootstrap                  Set up SCS according to the defaults'''
 			channel    = args[1]
 			localPath  = os.path.join(scsroot,'channels',channel)
 			localPkgs  = os.path.join(localPath,'packages')
-			svnclient = pysvn.Client()
 
 			if not channelSubscribed(channel):
-				fatal("Not subscribed to that channel")
+				fatal("Not subscribed to that channel",log=False)
 			else:
 				## Now do a property walk to know what packages to install
 				propList = svnclient.proplist(localPkgs,recurse=True)
@@ -1206,14 +1304,11 @@ T       bootstrap                  Set up SCS according to the defaults'''
 				del(metadataDict['channels'][channel])
 
 				## Output
-				info('Unsubscribed from channel ' + channel)
+				info('Unsubscribed from channel ' + channel,log=True)
 
 ################################################################################
 
 		elif action == 'check':
-			## SVN
-			svnclient = pysvn.Client()
-
 			output = ''
 
 			for channel in metadataDict['channels']:
