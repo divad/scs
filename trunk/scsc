@@ -88,7 +88,7 @@ T   set       NAME PROPERTY VALUE
 			metadict['channels'][name] = {'name': name}
 			
 	#### CHANNEL SET #######################################################
-	elif action == 'set' and len(args) == 3:
+	elif action == 'set' and len(args) == 4:
 		name  = args[1]
 		prop  = args[2]
 		value = args[3]
