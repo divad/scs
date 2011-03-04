@@ -118,7 +118,7 @@ def main():
 		parser.print_help()
 
 	## Save metadata
-	sSaveAndUnlock(metadict)
+	scslib.sSaveAndUnlock(metadict)
 
 if __name__ == "__main__":
 	if sys.version < '2.6':
