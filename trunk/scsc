@@ -12,7 +12,6 @@ import pysvn
 
 ## TODO
 # info
-# set
 
 def main():
 	#### HELP TEXT FOR ACTIONS
@@ -22,7 +21,7 @@ def main():
     create    NAME      Create a channel
     delete    NAME      Deletes a channel
 T   info      NAME      Show channel contents
-T   set       NAME PROPERTY VALUE     
+    set       NAME PROPERTY VALUE     
                         Set a channel property to VALUE
                         
     tag       CHANNEL PACKAGE
@@ -100,6 +99,8 @@ T   set       NAME PROPERTY VALUE
 		## DESC
 		if prop == 'desc':
 				metadict['channels'][channelName][prop] = value
+		else:
+			fatal("No such property")
 
 	#### CHANNEL DELETE ####################################################
 	elif action == 'delete' and len(args) == 2:
