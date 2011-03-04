@@ -64,9 +64,6 @@ def main():
 		checkout = os.path.join(pkgcodir,'p_' + name)
 		svnclient.checkout('file://' + svnpath, checkout)
 
-		## TODO options, like non-transactional
-		## TODO description
-
 		try:
 			os.mkdir(os.path.join(checkout,'scripts'))
 			os.mkdir(os.path.join(checkout,'.scs'))
@@ -90,6 +87,15 @@ def main():
 
 			## Record in metadict for lating saving into metafile
 			metadict['packages'][name] = {'name': name}
+			
+			## Other options
+			if options.stepfree:
+				metadict['packages'][name]['type'] = 'idempotent'
+			else:
+				metadict['packages'][name]['type'] = 'transactional'
+				
+			if not options.desc == None:
+				metadict['packages'][name]['desc'] = options.desc
 
 		## Cleanup in all cases
 		shutil.rmtree(checkout)

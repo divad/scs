@@ -18,12 +18,11 @@ import logging
 import logging.handlers
 
 ## TODO
-# FAULT RESPONSE? email? alert? RPC?
+# e-mail fault response
 # bootstrap command?
-# - revprop??
-
 # description truncate?
-	# new actions "pkg-info" and "chan-info" ??
+# new actions "pkg-info" and "chan-info" ??
+# move def's to scslib (easy)
 
 def saveMetadata():
 	global metadataDict
@@ -822,7 +821,7 @@ def main():
         unsubscribe   CHANNEL      Unsubscribe from a channel
 
     Other actions:
-T       bootstrap                  Set up SCS according to the defaults'''
+T       bootstrap                  Set up SCS according to built-in defaults'''
 
 	## Prepare the metadata dictionary (local)
 	global metadataDict
