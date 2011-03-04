@@ -97,7 +97,7 @@ T   set       NAME PROPERTY VALUE
 			fatal("Sorry, that channel does not exist!")
 		
 		## DESC
-		if prop eq 'desc':
+		if prop == 'desc':
 				metadict['channels'][name][prop] = value
 
 	#### CHANNEL DELETE ####################################################
