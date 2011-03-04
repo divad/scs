@@ -109,10 +109,18 @@ T   set       NAME PROPERTY VALUE
 
 	#### CHANNEL LIST ######################################################
 	elif action == 'list':
+		output = ''
 		for channame in metadict['channels']:
 			chandict = metadict['channels'][channame]
-			print chandict['name']
-			## TODO add desc
+			if chandict.has_key('desc'):
+				output += '{0:14}  {1:64}'.format(chandict['name'],chandict['desc'])
+			else:
+				output += '{0:14}  {1:64}'.format(chandict['name'],'N/A')
+			
+		if len(output) > 0:
+			print '{0:14}  {1:64}'.format('CHANNEL NAME','DESCRIPTION')
+			print '{0:14}  {1:64}'.format('------------','-----------')
+			sys.stdout.write(output)
 
 	#### CHANNEL TAG #######################################################
 	elif action == 'tag' and len(args) == 3:
