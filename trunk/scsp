@@ -94,7 +94,7 @@ def main():
 		## Cleanup in all cases
 		shutil.rmtree(checkout)
 		
-	elif action == 'desc' and len(args) == 3:
+	elif action == 'set' and len(args) == 3:
 		print 'Unimplemented'
 
 	#### PACKAGE DELETE ####################################################
