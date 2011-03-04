@@ -1,10 +1,8 @@
 #!/usr/bin/python
-
-## REQUIRES PYTHON 2.6
-
 # Subversion Configuration System Manager
 
 #### IMPORTS
+import scslib
 from optparse import OptionParser, OptionGroup
 import subprocess
 import os
@@ -17,8 +15,10 @@ import json
 import fcntl
 import time
 
-def main():
+## TODO
+# chan-info
 
+def main():
 	#### HELP TEXT FOR ACTIONS
 	usage = '''Usage: %prog [options] ACTION [...]
 
@@ -55,81 +55,26 @@ T       chan-info     NAME         Show channel contents
 	parser.add_option_group(group)
 	(options, args) = parser.parse_args()
 
-	#### VARIABLES
-	svnroot  = '/opt/scsm/svn/'
-	scsmroot = '/opt/scsm/scsm/'
-	metadata = '/opt/scsm/www/server.meta'
+	## Load configuration variables
+	(svnroot,scsmroot,metadataPath) = sLoadConfig(options.config);
 
-	#### LOAD SVN
+	## Get metadata
+	metadict = sLockAndLoad(metadataPath)
+
+	## Load subversion library
 	svnclient = pysvn.Client()
-
-	#### LOAD CONFIG
-	config = ConfigParser.RawConfigParser()
-	config.read(options.config)
-
-	if config.has_option('server','svn root'):
-		configValue = config.get('server','svn root')
-		if os.path.isdir(configValue):
-			svnroot = configValue
-		else:
-			print >> sys.stderr, 'The subversion root specified in ' + options.config + ' is not a directory'
-			sys.exit(1)
-
-	if config.has_option('server','metadata file'):
-		configValue = config.get('server','metadata file')
-		if os.path.isfile(configValue):
-			metadata = configValue
-		else:
-			print >> sys.stderr, 'The metadata file specified in ' + options.config + ' is not a file'
-			sys.exit(1)
-
-	if config.has_option('server','scsm root'):
-		configValue = config.get('server','scsm root')
-		if os.path.isdir(configValue):
-			scsmroot = configValue
-		else:
-			print >> sys.stderr, 'The scsm root specified in ' + options.config + ' is not a directory'
-			sys.exit(1)
 
 	## Build other paths
 	pkgcodir  = os.path.join(scsmroot,'packages')
 	chancodir = os.path.join(scsmroot,'channels')
 
+	## Deal with no args
 	if len(args) <= 0:
 		parser.print_help()
 		sys.exit(0)
-
+			
 	## Shortcut to action
 	action = args[0]
-
-	## Open metadata file, lock it, and read contents
-	try:
-		metafile = open(metadata,'r+')
-		fcntl.flock(metafile,fcntl.LOCK_EX)
-	except (IOError, OSError) as e:
-		print 'Unable to lock ' + str(e.filename) + ': ' + str(e.strerror)
-		sys.exit(1)
-
-	try:
-		jsonData = metafile.read()
-		metafile.seek(0)
-	except (IOError, OSError) as e:
-		fcntl.flock(metafile,fcntl.LOCK_UN)
-		print 'Unable to read from ' + e.filename + ': ' + e.strerror
-		sys.exit(1)
-
-	## Handle empty data
-	if len(jsonData) == 0:
-		metadict = {'channels': {}, 'packages': {}}
-	else:
-		## Turn json data into python objects
-		try:
-			metadict = json.loads(jsonData)
-		except (TypeError,ValueError) as e:
-			fcntl.flock(metafile,fcntl.LOCK_UN)
-			print 'Unable to understand metadata: ' + str(e)
-			sys.exit(0)
-
 
 	#### PACKAGE CREATE ####################################################
 	if action == 'pkg-create' and len(args) == 2:
@@ -176,6 +121,8 @@ T       chan-info     NAME         Show channel contents
 
 		## Cleanup in all cases
 		shutil.rmtree(checkout)
+		
+	elif action == 'pkg-desc' and len(args) == 3:
 
 	#### PACKAGE DELETE ####################################################
 	elif action == 'pkg-delete' and len(args) == 2:
@@ -410,48 +357,8 @@ T       chan-info     NAME         Show channel contents
 	else:
 		parser.print_help()
 
-	## Turn "metadict" into json
-	jsonOut = json.dumps(metadict, sort_keys=True, indent=4)
-
-	## Write to file
-	try:
-		metafile.seek(0)
-		metafile.truncate(0)
-		metafile.write(jsonOut)
-		metafile.close
-	except (IOError, OSError) as error:
-		print 'Failed to write metadata: ' + error.strerror + ' on ' + error.filename
-
-	## unlock
-	fcntl.flock(metafile,fcntl.LOCK_UN)
-
-def svn_create(path,name,svntype):
-	## Validate the name
-	regex = re.compile('^[a-zA-Z\_\-0-9]+$')
-	matched = regex.match(name)
-	if not matched:
-		print 'Invalid name! Name must only contain a-z, 0-9 or the characters _ and -'
-		sys.exit(1)
-
-	## Check dir doesnt already exist
-	if os.path.exists(path):
-		print >> sys.stderr, 'That ' + svntype + ' already exists!'
-		sys.exit(1)
-
-	svnadmin = subprocess.Popen(['svnadmin', 'create', path],stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-	(stdoutdata, stderrdata) = svnadmin.communicate()
-
-	## Handle errors
-	if svnadmin.returncode > 0:
-		print stdoutdata
-		sys.exit(1)
-
-def svn_delete(path,svntype):
-	if os.path.exists(path):
-		shutil.rmtree(path)
-	else:
-		print >> sys.stderr, 'That ' + svntype + ' does not exist!'
-		sys.exit(1)
+	## Save metadata
+	sSaveAndUnlock(metadict)
 
 if __name__ == "__main__":
 	if sys.version < '2.6':

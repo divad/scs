@@ -1,0 +1,132 @@
+#!/usr/bin/python
+# Subversion Configuration System Manager
+
+#### IMPORTS
+import scslib
+from optparse import OptionParser, OptionGroup
+import subprocess
+import os
+import sys
+import shutil
+import re
+import pysvn
+import ConfigParser
+import json
+import fcntl
+import time
+
+def main():
+	usage = '''Usage: %prog [options] ACTION [...]
+	
+    list                              Lists all packages
+    create    NAME                    Create a package
+    delete    NAME                    Deletes a package
+    set       NAME PROPERTY VALUE     Set a package property to VALUE'''
+
+	#### COMMAND LINE PARSER
+	parser = OptionParser(usage=usage,version='scs version 3')
+	parser.add_option('-c','--config-file',dest='config',default="/etc/scs.conf",help='Set the configuration file to use')
+	group = OptionGroup(parser,"Options for 'create'")
+	group.add_option('-s','--step-free',action='store_true',dest='stepfree',default=False,help='Create a non-transactional package')
+	parser.add_option_group(group)
+	(options, args) = parser.parse_args()
+
+	## Load configuration variables
+	(svnroot,scsmroot,metadataPath) = scslib.sLoadConfig(options.config);
+
+	## Get metadata
+	metadict = scslib.sLockAndLoad(metadataPath)
+
+	## Load subversion library
+	svnclient = pysvn.Client()
+
+	## Build package path
+	pkgcodir  = os.path.join(scsmroot,'packages')
+
+	## Deal with no args
+	if len(args) <= 0:
+		parser.print_help()
+		sys.exit(0)
+			
+	## Shortcut to action
+	action = args[0]
+
+	#### PACKAGE CREATE ####################################################
+	if action == 'create' and len(args) == 2:
+		name = args[1]
+		svnpath = os.path.join(svnroot,'p_' + name)
+
+		## Make sure it does not exist
+		if metadict['packages'].has_key(name):
+			print "Sorry, that package already exists"
+			sys.exit(1)
+
+		## Create the SVN
+		svn_create(svnpath,name,'package')
+
+		## Checkout the new SVN
+		checkout = os.path.join(pkgcodir,'p_' + name)
+		svnclient.checkout('file://' + svnpath, checkout)
+
+		## TODO options, like non-transactional
+
+		try:
+			os.mkdir(os.path.join(checkout,'scripts'))
+			os.mkdir(os.path.join(checkout,'.scs'))
+			os.mkdir(os.path.join(checkout,'data'))
+			open(os.path.join(checkout,'scripts','preinit'),'w')
+			open(os.path.join(checkout,'scripts','postinit'),'w')
+			open(os.path.join(checkout,'scripts','uninit'),'w')
+			open(os.path.join(checkout,'scripts','preup'),'w')
+			open(os.path.join(checkout,'scripts','postup'),'w')
+			open(os.path.join(checkout,'scripts','preinst'),'w')
+			open(os.path.join(checkout,'scripts','postinst'),'w')
+			open(os.path.join(checkout,'scripts','preinc'),'w')
+			#open(os.path.join(checkout,'.scs','stepfree'),'w')
+		except (OSError, IOError) as error:
+			print 'Failed to create base components of package. Error was: ' + error.strerror + ' on ' + error.filename
+		else:
+			svnclient.add(os.path.join(checkout,'scripts'),recurse=True)
+			#svnclient.add(os.path.join(checkout,'.scs'),recurse=True)
+			svnclient.add(os.path.join(checkout,'data'),recurse=True)
+			revision = svnclient.checkin(checkout,"Package creation",recurse=True)
+
+			## Record in metadict for lating saving into metafile
+			metadict['packages'][name] = {'name': name}
+
+		## Cleanup in all cases
+		shutil.rmtree(checkout)
+		
+	elif action == 'desc' and len(args) == 3:
+		print 'Unimplemented'
+
+	#### PACKAGE DELETE ####################################################
+	elif action == 'delete' and len(args) == 2:
+		name = args[1]
+
+		## Make sure it exists
+		if not metadict['packages'].has_key(name):
+			print "Sorry, that package does not exist"
+			sys.exit(1)
+		else:
+			svn_delete(os.path.join(svnroot,'p_' + name),'package')
+			del(metadict['packages'][name])
+
+	#### PACKAGE LIST ######################################################
+	elif action == 'list':
+		for pkgname in metadict['packages']:
+			pkgdict = metadict['packages'][pkgname]
+			print pkgdict['name']
+			
+	else:
+		parser.print_help()
+
+	## Save metadata
+	sSaveAndUnlock(metadict)
+
+if __name__ == "__main__":
+	if sys.version < '2.6':
+		print 'Wrong Python Version !!!'
+		sys.exit(1)
+	else:
+	    main()

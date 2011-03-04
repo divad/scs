@@ -18,11 +18,12 @@ import logging
 import logging.handlers
 
 ## TODO
-# FAULT RESPONSE
+# FAULT RESPONSE? email? alert? RPC?
 # bootstrap command?
 # - revprop??
+
 # description truncate?
-# new actions "pkg-info" and "chan-info" ?
+	# new actions "pkg-info" and "chan-info" ??
 
 def saveMetadata():
 	global metadataDict
@@ -953,7 +954,7 @@ T       bootstrap                  Set up SCS according to the defaults'''
 					for infoTuple in infoList:
 						infoDict = infoTuple[1]
 						latestRevision = infoDict['rev']
-				
+						
 					if data.has_key('name') and data.has_key('desc'):
 						output += "{0:14}  {1:15}  {2:37}\n".format(str(data['name']), str(latestRevision.number), str(data['desc']))
 					elif data.has_key('name'):
