@@ -89,9 +89,9 @@ T   set       NAME PROPERTY VALUE
 			
 	#### CHANNEL SET #######################################################
 	elif action == 'set' and len(args) == 4:
-		name  = args[1]
-		prop  = args[2]
-		value = args[3]
+		channelName  = args[1]
+		prop         = args[2]
+		value        = args[3]
 		
 		if not metadict['channels'].has_key(channelName):
 			fatal("Sorry, that channel does not exist!")
