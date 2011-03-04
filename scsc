@@ -4,51 +4,35 @@
 #### IMPORTS
 import scslib
 from optparse import OptionParser, OptionGroup
-import subprocess
 import os
 import sys
 import shutil
-import re
 import pysvn
-import ConfigParser
-import json
-import fcntl
-#import time
 
 ## TODO
-# chan-info
+# info
 
 def main():
 	#### HELP TEXT FOR ACTIONS
 	usage = '''Usage: %prog [options] ACTION [...]
 
-    Package-related actions:
-        pkg-create    NAME         Create a package
-        pkg-delete    NAME         Deletes a package
-		pkg-list                   Lists all packages
-
-    Channel-related actions:
-        chan-create   NAME         Create a channel
-        chan-delete   NAME         Deletes a channel
-        chan-list                  Lists all channels
-T       chan-info     NAME         Show channel contents
-	  
-    Other actions:
-        tag           CHANNEL PACKAGE
-                      Adds the specified package name to the channel
-        untag         CHANNEL PACKAGE
-                      Removes the specified package name from the channel  
-        priority      CHANNEL PACKAGE PRIORITY
-                      Sets the installation order PRIORITY on PACKAGE in CHANNEL'''
-
-## TODO chan-info
+    list                Lists all channels
+    create    NAME      Create a channel
+    delete    NAME      Deletes a channel
+T   info      NAME      Show channel contents
+    set       NAME PROPERTY VALUE     
+                        Set a channel property to VALUE
+                        
+    tag       CHANNEL PACKAGE
+                        Adds the specified package name to the channel
+    untag     CHANNEL PACKAGE
+                        Removes the specified package name from the channel  
+    priority  CHANNEL PACKAGE PRIORITY
+                        Sets the installation order PRIORITY on PACKAGE in CHANNEL'''
 
 	#### COMMAND LINE PARSER
-	parser = OptionParser(usage=usage,version='%prog version 2')
+	parser = OptionParser(usage=usage,version='%prog version 3')
 	parser.add_option('-c','--config-file',dest='config',default="/etc/scs.conf",help='Set the configuration file to use')
-	group = OptionGroup(parser,"Options for 'pkg-create'")
-	group.add_option('-s','--step-free',action='store_true',dest='stepfree',default=False,help='Create a non-transactional package')
-	parser.add_option_group(group)
 	group = OptionGroup(parser,"Options for 'tag'")
 	group.add_option('-r','--revision',type="int",default=-1,dest='revision',help='Specify a specific revision of the package to tag')
 	group.add_option('-o','--install-order',type="int",default=-1,dest='instorder',help='Set a installation priority to let scs known what order to install packages')
@@ -58,6 +42,11 @@ T       chan-info     NAME         Show channel contents
 	## Load configuration variables
 	(svnroot,scsmroot,metadataPath) = scslib.sLoadConfig(options.config);
 
+	## Deal with no args
+	if len(args) <= 0:
+		parser.print_help()
+		sys.exit(0)
+
 	## Get metadata
 	metadict = scslib.sLockAndLoad(metadataPath)
 
@@ -65,24 +54,17 @@ T       chan-info     NAME         Show channel contents
 	svnclient = pysvn.Client()
 
 	## Build other paths
-	pkgcodir  = os.path.join(scsmroot,'packages')
 	chancodir = os.path.join(scsmroot,'channels')
-
-	## Deal with no args
-	if len(args) <= 0:
-		parser.print_help()
-		sys.exit(0)
 			
 	## Shortcut to action
 	action = args[0]
 
 	#### CHANNEL CREATE ####################################################
-	if action == 'chan-create' and len(args) == 2:
+	if action == 'create' and len(args) == 2:
 		name = args[1]
 
 		if metadict['channels'].has_key(name):
-			print "Sorry, that channel already exists!"
-			sys.exit(1)
+			fatal("Sorry, that channel already exists!")
 
 		## Workout the SVN root should be
 		svnpath = os.path.join(svnroot,'c_' + name)
@@ -105,13 +87,13 @@ T       chan-info     NAME         Show channel contents
 			metadict['channels'][name] = {'name': name}
 
 	#### CHANNEL DELETE ####################################################
-	elif action == 'chan-delete' and len(args) == 2:
+	elif action == 'delete' and len(args) == 2:
 		name = args[1]
 		svn_delete(os.path.join(svnroot,'c_' + name),'channel')
 		shutil.rmtree(os.path.join(chancodir,'c_' + name))
 
 	#### CHANNEL LIST ######################################################
-	elif action == 'chan-list':
+	elif action == 'list':
 		for channame in metadict['channels']:
 			chandict = metadict['channels'][channame]
 			print chandict['name']
@@ -128,12 +110,10 @@ T       chan-info     NAME         Show channel contents
 		pkgUpgradeFile  = os.path.join(channelCheckout,'upgrade')
 
 		if not metadict['channels'].has_key(channelName):
-			print "Sorry, that channel does not exist!"
-			sys.exit(1)
+			fatal("Sorry, that channel does not exist!")
 
 		if not metadict['packages'].has_key(packageName):
-			print "Sorry, that channel does not exist!"
-			sys.exit(1)
+			fatal("Sorry, that channel does not exist!")
 
 		## Make sure channel is up-to-date
 		svnclient.update(os.path.join(chancodir,'c_' + channelName))
@@ -145,8 +125,7 @@ T       chan-info     NAME         Show channel contents
 		## Was there a specific revision to use?
 		if options.revision >= 0:
 			if options.revision >= currentPackageRevision:
-				print 'Invalid package revision'
-				sys.exit(0)
+				fatal('Invalid package revision')
 			else:
 				taggedRevision = options.revision
 		else:
@@ -158,11 +137,9 @@ T       chan-info     NAME         Show channel contents
 			currentRev = currentRev[pkgConfigFile]
 
 			if int(currentRev) == int(taggedRevision):
-				print 'The package is already tagged to that revision'
-				sys.exit(0)
+				fatal('The package is already tagged to that revision',code=0)
 			elif int(currentRev) > int(taggedRevision):
-				print 'The package is already tagged to a more recent revision'
-				sys.exit(0)
+				fatal('The package is already tagged to a more recent revision',code=0)
 
 		## Touch the package name in packages/ in the channel
 		try:
@@ -226,8 +203,7 @@ T       chan-info     NAME         Show channel contents
 
 		## is this pkg already tagged? Check the packages/ dir
 		if not os.path.isfile(pkgConfigFile):
-			print 'The package is not tagged to the channel'
-			sys.exit(0)
+			fatal('The package is not tagged to the channel')
 
 		try:
 			### Remove all previous properties on the upgrade file if it exists
@@ -268,12 +244,10 @@ T       chan-info     NAME         Show channel contents
 		pkgConfigFile   = os.path.join(channelCheckout,'packages',packageName)
 
 		if not metadict['channels'].has_key(channelName):
-			print "Sorry, that channel does not exist!"
-			sys.exit(1)
+			fatal("Sorry, that channel does not exist!")
 
 		if not metadict['packages'].has_key(packageName):
-			print "Sorry, that channel does not exist!"
-			sys.exit(1)
+			fatal("Sorry, that channel does not exist!")
 
 		## Make sure channel is up-to-date
 		svnclient.update(os.path.join(chancodir,'c_' + channelName))
