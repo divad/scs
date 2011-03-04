@@ -11,6 +11,7 @@ import pysvn
 
 ## TODO
 # info
+# set
 
 def main():
 	#### HELP TEXT FOR ACTIONS
@@ -20,7 +21,7 @@ def main():
     create    NAME      Create a channel
     delete    NAME      Deletes a channel
 T   info      NAME      Show channel contents
-    set       NAME PROPERTY VALUE     
+T   set       NAME PROPERTY VALUE     
                         Set a channel property to VALUE
                         
     tag       CHANNEL PACKAGE
@@ -28,7 +29,7 @@ T   info      NAME      Show channel contents
     untag     CHANNEL PACKAGE
                         Removes the specified package name from the channel  
     priority  CHANNEL PACKAGE PRIORITY
-                        Sets the installation order PRIORITY on PACKAGE in CHANNEL'''
+                        Sets the install order PRIORITY on PACKAGE in CHANNEL'''
 
 	#### COMMAND LINE PARSER
 	parser = OptionParser(usage=usage,version='%prog version 3')
@@ -45,7 +46,7 @@ T   info      NAME      Show channel contents
 	## Deal with no args
 	if len(args) <= 0:
 		parser.print_help()
-		sys.exit(0)
+		return
 
 	## Get metadata
 	metadict = scslib.sLockAndLoad(metadataPath)
@@ -70,7 +71,7 @@ T   info      NAME      Show channel contents
 		svnpath = os.path.join(svnroot,'c_' + name)
 
 		## Create it there
-		svn_create(svnpath,name,'channel')
+		scslib.sCreateSVN(svnpath,name,'channel')
 
 		## Checkout
 		codir = os.path.join(chancodir,'c_' + name)
@@ -85,11 +86,24 @@ T   info      NAME      Show channel contents
 			svnclient.add(os.path.join(codir,'packages'))
 			revision = svnclient.checkin(codir,"Channel creation",recurse=True)
 			metadict['channels'][name] = {'name': name}
+			
+	#### CHANNEL SET #######################################################
+	elif action == 'set' and len(args) == 3:
+		name  = args[1]
+		prop  = args[2]
+		value = args[3]
+		
+		if not metadict['channels'].has_key(channelName):
+			fatal("Sorry, that channel does not exist!")
+		
+		## DESC
+		if prop eq 'desc':
+				metadict['channels'][name][prop] = value
 
 	#### CHANNEL DELETE ####################################################
 	elif action == 'delete' and len(args) == 2:
 		name = args[1]
-		svn_delete(os.path.join(svnroot,'c_' + name),'channel')
+		scslib.sDeleteSVN(os.path.join(svnroot,'c_' + name),'channel')
 		shutil.rmtree(os.path.join(chancodir,'c_' + name))
 
 	#### CHANNEL LIST ######################################################
@@ -97,9 +111,11 @@ T   info      NAME      Show channel contents
 		for channame in metadict['channels']:
 			chandict = metadict['channels'][channame]
 			print chandict['name']
+			## TODO add desc
 
 	#### CHANNEL TAG #######################################################
 	elif action == 'tag' and len(args) == 3:
+	
 		## Setup variables
 		channelName     = args[1]
 		packageName     = args[2]
@@ -113,7 +129,7 @@ T   info      NAME      Show channel contents
 			fatal("Sorry, that channel does not exist!")
 
 		if not metadict['packages'].has_key(packageName):
-			fatal("Sorry, that channel does not exist!")
+			fatal("Sorry, that package does not exist!")
 
 		## Make sure channel is up-to-date
 		svnclient.update(os.path.join(chancodir,'c_' + channelName))
@@ -191,12 +207,10 @@ T   info      NAME      Show channel contents
 		pkgUpgradeFile  = os.path.join(channelCheckout,'upgrade')
 
 		if not metadict['channels'].has_key(channelName):
-			print "Sorry, that channel does not exist!"
-			sys.exit(1)
+			fatal("Sorry, that channel does not exist!")
 
 		if not metadict['packages'].has_key(packageName):
-			print "Sorry, that package does not exist!"
-			sys.exit(1)
+			fatal("Sorry, that package does not exist!")
 
 		## Make sure channel is up-to-date
 		svnclient.update(os.path.join(chancodir,'c_' + channelName))
