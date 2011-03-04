@@ -13,7 +13,7 @@ import pysvn
 import ConfigParser
 import json
 import fcntl
-import time
+#import time
 
 ## TODO
 # chan-info
@@ -56,10 +56,10 @@ T       chan-info     NAME         Show channel contents
 	(options, args) = parser.parse_args()
 
 	## Load configuration variables
-	(svnroot,scsmroot,metadataPath) = sLoadConfig(options.config);
+	(svnroot,scsmroot,metadataPath) = scslib.sLoadConfig(options.config);
 
 	## Get metadata
-	metadict = sLockAndLoad(metadataPath)
+	metadict = scslib.sLockAndLoad(metadataPath)
 
 	## Load subversion library
 	svnclient = pysvn.Client()
@@ -76,74 +76,8 @@ T       chan-info     NAME         Show channel contents
 	## Shortcut to action
 	action = args[0]
 
-	#### PACKAGE CREATE ####################################################
-	if action == 'pkg-create' and len(args) == 2:
-		name = args[1]
-		svnpath = os.path.join(svnroot,'p_' + name)
-
-		## Make sure it does not exist
-		if metadict['packages'].has_key(name):
-			print "Sorry, that package already exists"
-			sys.exit(1)
-
-		## Create the SVN
-		svn_create(svnpath,name,'package')
-
-		## Checkout the new SVN
-		checkout = os.path.join(pkgcodir,'p_' + name)
-		svnclient.checkout('file://' + svnpath, checkout)
-
-		## TODO options, like non-transactional
-
-		try:
-			os.mkdir(os.path.join(checkout,'scripts'))
-			os.mkdir(os.path.join(checkout,'.scs'))
-			os.mkdir(os.path.join(checkout,'data'))
-			open(os.path.join(checkout,'scripts','preinit'),'w')
-			open(os.path.join(checkout,'scripts','postinit'),'w')
-			open(os.path.join(checkout,'scripts','uninit'),'w')
-			open(os.path.join(checkout,'scripts','preup'),'w')
-			open(os.path.join(checkout,'scripts','postup'),'w')
-			open(os.path.join(checkout,'scripts','preinst'),'w')
-			open(os.path.join(checkout,'scripts','postinst'),'w')
-			open(os.path.join(checkout,'scripts','preinc'),'w')
-			#open(os.path.join(checkout,'.scs','stepfree'),'w')
-		except (OSError, IOError) as error:
-			print 'Failed to create base components of package. Error was: ' + error.strerror + ' on ' + error.filename
-		else:
-			svnclient.add(os.path.join(checkout,'scripts'),recurse=True)
-			#svnclient.add(os.path.join(checkout,'.scs'),recurse=True)
-			svnclient.add(os.path.join(checkout,'data'),recurse=True)
-			revision = svnclient.checkin(checkout,"Package creation",recurse=True)
-
-			## Record in metadict for lating saving into metafile
-			metadict['packages'][name] = {'name': name}
-
-		## Cleanup in all cases
-		shutil.rmtree(checkout)
-		
-	elif action == 'pkg-desc' and len(args) == 3:
-
-	#### PACKAGE DELETE ####################################################
-	elif action == 'pkg-delete' and len(args) == 2:
-		name = args[1]
-
-		## Make sure it exists
-		if not metadict['packages'].has_key(name):
-			print "Sorry, that package does not exist"
-			sys.exit(1)
-		else:
-			svn_delete(os.path.join(svnroot,'p_' + name),'package')
-			del(metadict['packages'][name])
-
-	#### PACKAGE LIST ######################################################
-	elif action == 'pkg-list':
-		for pkgname in metadict['packages']:
-			pkgdict = metadict['packages'][pkgname]
-			print pkgdict['name']
-
 	#### CHANNEL CREATE ####################################################
-	elif action == 'chan-create' and len(args) == 2:
+	if action == 'chan-create' and len(args) == 2:
 		name = args[1]
 
 		if metadict['channels'].has_key(name):
@@ -358,11 +292,10 @@ T       chan-info     NAME         Show channel contents
 		parser.print_help()
 
 	## Save metadata
-	sSaveAndUnlock(metadict)
+	scslib.sSaveAndUnlock(metadict)
 
 if __name__ == "__main__":
 	if sys.version < '2.6':
-		print 'Wrong Python Version !!!'
-		sys.exit(1)
+		fatal('Wrong Python Version !!!')
 	else:
 	    main()

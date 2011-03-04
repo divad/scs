@@ -4,16 +4,11 @@
 #### IMPORTS
 import scslib
 from optparse import OptionParser, OptionGroup
-import subprocess
 import os
 import sys
 import shutil
-import re
 import pysvn
-import ConfigParser
-import json
-import fcntl
-import time
+#import time
 
 def main():
 	usage = '''Usage: %prog [options] ACTION [...]
@@ -58,8 +53,7 @@ def main():
 
 		## Make sure it does not exist
 		if metadict['packages'].has_key(name):
-			print "Sorry, that package already exists"
-			sys.exit(1)
+			fatal("Sorry, that package already exists")
 
 		## Create the SVN
 		svn_create(svnpath,name,'package')
@@ -106,8 +100,7 @@ def main():
 
 		## Make sure it exists
 		if not metadict['packages'].has_key(name):
-			print "Sorry, that package does not exist"
-			sys.exit(1)
+			fatal("Sorry, that package does not exist")
 		else:
 			svn_delete(os.path.join(svnroot,'p_' + name),'package')
 			del(metadict['packages'][name])
@@ -126,7 +119,6 @@ def main():
 
 if __name__ == "__main__":
 	if sys.version < '2.6':
-		print 'Wrong Python Version !!!'
-		sys.exit(1)
+		fatal('Wrong Python Version !!!')
 	else:
 	    main()
