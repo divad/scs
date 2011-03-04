@@ -94,8 +94,20 @@ def main():
 		## Cleanup in all cases
 		shutil.rmtree(checkout)
 		
-	elif action == 'set' and len(args) == 3:
-		print 'Unimplemented'
+	#### PACKAGE SET #######################################################
+	elif action == 'set' and len(args) == 4:
+		pkgName  = args[1]
+		prop     = args[2]
+		value    = args[3]
+		
+		if not metadict['packages'].has_key(pkgName):
+			fatal("That package does not exist")
+		
+		## DESC
+		if prop == 'desc':
+				metadict['packages'][pkgName][prop] = value
+		else:
+			fatal("No such property")
 
 	#### PACKAGE DELETE ####################################################
 	elif action == 'delete' and len(args) == 2:
@@ -114,6 +126,21 @@ def main():
 			pkgdict = metadict['packages'][pkgname]
 			print pkgdict['name']
 			## TODO add desc
+			
+	elif action == 'list':
+		output = ''
+		for pkgname in metadict['packages']:
+			pkgdict = metadict['packages'][pkgname]
+			
+			if pkgdict.has_key('desc'):
+				output += '{0:14}  {1:64}'.format(pkgdict['name'],pkgdict['desc'])
+			else:
+				output += '{0:14}  {1:64}'.format(pkgdict['name'],'N/A')
+			
+		if len(output) > 0:
+			print '{0:14}  {1:64}'.format('PACKAGE NAME','DESCRIPTION')
+			print '{0:14}  {1:64}'.format('------------','-----------')
+			sys.stdout.write(output)		
 			
 	else:
 		parser.print_help()
