@@ -18,11 +18,15 @@ import logging
 import logging.handlers
 
 ## TODO
-# e-mail fault response
-# bootstrap command?
-# description truncate?
-# new actions "pkg-info" and "chan-info" ??
-# move def's to scslib (easy)
+# e-mail fault response							1		(easy)
+# bootstrap command?							5		(easy)
+	# create /opt/scs/ etc.
+	# create /etc/scs.conf with server as https://scs.domain/ and all other defaults
+# description truncate?							2		(EASY)
+# new actions "pkg-info" and "chan-info" ??		3
+	# pkg-info will just print fields
+	# channel info will print channel members
+# move def's to scslib (easy)					4
 
 def saveMetadata():
 	global metadataDict
