@@ -51,8 +51,6 @@ def sLoadConfig(configFile):
 		else:
 			fatal('The scsm root specified in ' + configFile + ' is not a directory')
 			
-	sys.exit(metafilePath)
-	
 	return (svnroot,scsmroot,metafilePath)
 	
 ################################################################################
