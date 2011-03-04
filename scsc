@@ -99,7 +99,7 @@ T   set       NAME PROPERTY VALUE
 		
 		## DESC
 		if prop == 'desc':
-				metadict['channels'][name][prop] = value
+				metadict['channels'][channelName][prop] = value
 
 	#### CHANNEL DELETE ####################################################
 	elif action == 'delete' and len(args) == 2:
