@@ -122,12 +122,6 @@ def main():
 
 	#### PACKAGE LIST ######################################################
 	elif action == 'list':
-		for pkgname in metadict['packages']:
-			pkgdict = metadict['packages'][pkgname]
-			print pkgdict['name']
-			## TODO add desc
-			
-	elif action == 'list':
 		output = ''
 		for pkgname in metadict['packages']:
 			pkgdict = metadict['packages'][pkgname]
