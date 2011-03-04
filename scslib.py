@@ -123,7 +123,7 @@ def sCreateSVN(path,name,svntype):
 
 ################################################################################
 
-def svn_delete(path,svntype):
+def sDeleteSVN(path,svntype):
 	if os.path.exists(path):
 		shutil.rmtree(path)
 	else:

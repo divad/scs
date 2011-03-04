@@ -58,7 +58,7 @@ def main():
 			fatal("Sorry, that package already exists")
 
 		## Create the SVN
-		svn_create(svnpath,name,'package')
+		scslib.sCreateSVN(svnpath,name,'package')
 
 		## Checkout the new SVN
 		checkout = os.path.join(pkgcodir,'p_' + name)
@@ -105,7 +105,7 @@ def main():
 		if not metadict['packages'].has_key(name):
 			fatal("Sorry, that package does not exist")
 		else:
-			svn_delete(os.path.join(svnroot,'p_' + name),'package')
+			scslib.sDeleteSVN(os.path.join(svnroot,'p_' + name),'package')
 			del(metadict['packages'][name])
 
 	#### PACKAGE LIST ######################################################
@@ -113,6 +113,7 @@ def main():
 		for pkgname in metadict['packages']:
 			pkgdict = metadict['packages'][pkgname]
 			print pkgdict['name']
+			## TODO add desc
 			
 	else:
 		parser.print_help()
