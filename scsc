@@ -41,7 +41,7 @@ T   info      NAME      Show channel contents
 	(options, args) = parser.parse_args()
 
 	## Load configuration variables
-	(svnroot,scsmroot,metadataPath) = scslib.sLoadConfig(options.config);
+	conf = scslib.sLoadConfig(options.config);
 
 	## Deal with no args
 	if len(args) <= 0:
@@ -49,13 +49,13 @@ T   info      NAME      Show channel contents
 		return
 
 	## Get metadata
-	metadict = scslib.sLockAndLoad(metadataPath)
+	metadict = scslib.sLockAndLoad(conf['metadataPath'])
 
 	## Load subversion library
 	svnclient = pysvn.Client()
 
 	## Build other paths
-	chancodir = os.path.join(scsmroot,'channels')
+	chancodir = os.path.join(conf['scsmroot'],'channels')
 			
 	## Shortcut to action
 	action = args[0]
@@ -68,7 +68,7 @@ T   info      NAME      Show channel contents
 			fatal("Sorry, that channel already exists!")
 
 		## Workout the SVN root should be
-		svnpath = os.path.join(svnroot,'c_' + name)
+		svnpath = os.path.join(conf['svnroot'],'c_' + name)
 
 		## Create it there
 		scslib.sCreateSVN(svnpath,name,'channel')
@@ -105,7 +105,7 @@ T   info      NAME      Show channel contents
 	#### CHANNEL DELETE ####################################################
 	elif action == 'delete' and len(args) == 2:
 		name = args[1]
-		scslib.sDeleteSVN(os.path.join(svnroot,'c_' + name),'channel')
+		scslib.sDeleteSVN(os.path.join(conf['svnroot'],'c_' + name),'channel')
 		shutil.rmtree(os.path.join(chancodir,'c_' + name))
 
 	#### CHANNEL LIST ######################################################
@@ -129,7 +129,7 @@ T   info      NAME      Show channel contents
 		## Setup variables
 		channelName     = args[1]
 		packageName     = args[2]
-		pkgSvnPath      = os.path.join(svnroot,'p_' + packageName)
+		pkgSvnPath      = os.path.join(conf['svnroot'],'p_' + packageName)
 		pkgCheckout     = os.path.join(pkgcodir,'p_' + packageName)
 		channelCheckout = os.path.join(chancodir,'c_' + channelName)
 		pkgConfigFile   = os.path.join(channelCheckout,'packages',packageName)

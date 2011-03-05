@@ -132,10 +132,10 @@ def fatal(o,exitcode=1,log=True):
 #### - warn - Warn the file has changed - OVERWRITES LOCAL CHANGES
 #### - skip - don't change /that/ file, and that file alone, on the next increment - DOES NOT OVERWRITE
 def checkForLocalChanges(pkg):
-	global scsroot
+	global conf
 	ignoreList = []
 	svnclient = pysvn.Client()
-	propList = svnclient.proplist(os.path.join(scsroot,'packages',pkg,'data'),recurse=True)
+	propList = svnclient.proplist(os.path.join(conf['scsroot'],'packages',pkg,'data'),recurse=True)
 	
 	## Return code
 	# 0 - no locally changed files
@@ -211,9 +211,9 @@ def channelSubscribed(channel):
 ################################################################################
 
 def listFiles(pkg):
-	global scsroot
+	global conf
 	svnclient = pysvn.Client()
-	propList = svnclient.proplist(os.path.join(scsroot,'packages',pkg,'data'),recurse=True)
+	propList = svnclient.proplist(os.path.join(conf['scsroot'],'packages',pkg,'data'),recurse=True)
 
 	for propSet in propList:
 		source     = propSet[0]
@@ -288,9 +288,9 @@ def shasum(filePath,blocksize=2**20):
 ################################################################################
 
 def runScript(pkgName,scriptName):
-	global scsroot
+	global conf
 	debug('Executing ' + scriptName,log=True)
-	scriptPath = os.path.join(scsroot,'packages',pkgName,'scripts',scriptName)
+	scriptPath = os.path.join(conf['scsroot'],'packages',pkgName,'scripts',scriptName)
 
 	## CHMOD First
 	os.chmod(scriptPath,stat.S_IRWXU)
@@ -333,7 +333,7 @@ def fetchMetadata(metadataUrl):
 ################################################################################
 
 def uninitPkg(pkg):
-	global scsroot
+	global conf
 
 	if packageInstalled(pkg):
 		(scode,sout) = runScript(pkg,'uninit')
@@ -343,7 +343,7 @@ def uninitPkg(pkg):
 			return 1
 		else:
 			## Delete data
-			shutil.rmtree(os.path.join(scsroot,'packages',pkg))
+			shutil.rmtree(os.path.join(conf['scsroot'],'packages',pkg))
 
 			## Update metadata
 			del(metadataDict['packages'][pkg])
@@ -369,8 +369,8 @@ def updateChannel(channel):
 	svnclient = pysvn.Client()
 
 	if channelSubscribed(channel):	
-		remotePath  = svnroot + '/c_' + channel + '/'
-		localPath   = os.path.join(scsroot,'channels',channel)
+		remotePath  = conf['svnroot'] + '/c_' + channel + '/'
+		localPath   = os.path.join(conf['scsroot'],'channels',channel)
 		localPkgs   = os.path.join(localPath,'packages')
 		upgradeFile = remotePath + 'upgrade'
 
@@ -406,23 +406,44 @@ def updateChannel(channel):
 
 					## Result of pkgInit
 					if result > 0:
+					
+						## TODO in each of the following we MUST send an e-mail
+						import smtplib
+						from email.mime.text import MIMEText
+						msg = MIMEText('This is a test')
+						msg['Subject'] = 'The subject goes here'
+						msg['From'] = 'from'
+						msg['To'] = 'to'
+						
+						s = smtplib.SMTP('rcfg.soton.ac.uk',25)
+						s.sendmail('root@localhost', 'notify@scs.soton.ac.uk', msg.as_string())
+						s.quit()
+					
 						if result == 1:
-							## Failed to init package, thus the channel upgrade has failed!
+							## A pre-script failed
 							fatal("Could not upgrade channel. Please correct the error and try to upgrade again")
 							return 1
+						elif result == 5:
+							## Package is suspended
+							fatal("Package is currently suspended. Please correct the error and try to upgrade again")
+						elif  result == 6:
+							## Package does not exist
+							fatal("Package does not exist. Please correct the error and try to upgrade again")
 						else:
+							## A failure condition where the package should now be suspended
+							
 							if result == 2:
+								## Property application failed - major fault
 								suspendPackage(properties['name'],"A major fault occured when applying package properties")
 							elif result == 3:
+								## Property allocation failed - minor fault
 								suspendPackage(properties['name'],"A minor fault occured when applying package properties")
 							elif result == 4:
+								## Post-script returned non-zero
 								suspendPackage(properties['name'],"A post script returned an error after package installation")
-							elif result == 5:
-								fatal("Package is currently suspended. Could not update channel.")
-							elif result == 6:
-								fatal("Package does not exist. Could not subscribe to channel.")
 							elif result == 7:
-								suspendPackage(properties['name'],"One or more files have been changed locally")							
+								## Changed files detected that fail the package upgrade
+								suspendPackage(properties['name'],"One or more files have been changed locally")
 
 							fatal("Package suspended. Channel could not be updated.")
 
@@ -468,13 +489,12 @@ def updateChannel(channel):
 ## 7 = Local changes detected during upgrade
 
 def initPkg(pkg,rev=-1):
-	global scsroot
-	global svnroot
+	global conf
 	global options
 	global args
 
 	## Get package info from server
-	metadict = fetchMetadata(metaurl)
+	metadict = fetchMetadata(conf['metaurl'])
 
 	## See if the package requested actually exists
 	found = False
@@ -495,8 +515,8 @@ def initPkg(pkg,rev=-1):
 	svnclient = pysvn.Client()
 
 	## Work out paths
-	remotePath   = svnroot + '/p_' + pkg + '/' 
-	localPath    = os.path.join(scsroot,'packages',pkg)
+	remotePath   = conf['svnroot'] + '/p_' + pkg + '/' 
+	localPath    = os.path.join(conf['scsroot'],'packages',pkg)
 	localScripts = os.path.join(localPath,'scripts')
 	localData    = os.path.join(localPath,'data')
 	
@@ -874,14 +894,11 @@ T       bootstrap                  Set up SCS according to built-in defaults'''
 	config = ConfigParser.RawConfigParser()
 	config.read(options.config)
 
-	global scsroot
-	global svnroot
-	global metaurl
-
-	scsroot = '/opt/scs/'
-	svnroot = ''
-	metaurl = ''
-
+	global conf
+	conf['scsroot'] = '/opt/scs/'
+	conf['svnroot'] = ''
+	conf['metaurl'] = ''
+	
 	## log file
 	if config.has_option('client','log file'):
 		openLog(config.get('client','log file'))
@@ -892,25 +909,25 @@ T       bootstrap                  Set up SCS according to built-in defaults'''
 	if config.has_option('client','scs root'):
 		configValue = config.get('client','scs root')
 		if os.path.isdir(configValue):
-			scsroot = configValue
+			conf['scsroot'] = configValue
 		else:
 			fatal('The scs root specified in ' + options.config + ' is not a directory')
 
 	## svn root
 	if config.has_option('client','svn root'):
-		svnroot = config.get('client','svn root')
+		conf['svnroot'] = config.get('client','svn root')
 	else:
 		fatal('No svn root defined in ' + options.config)
 
 	if config.has_option('client','metadata url'):
-		metaurl = config.get('client','metadata url')
+		conf['metaurl'] = config.get('client','metadata url')
 	else:
 		fatal('No metadata url defined in ' + options.config)
 
 	#### LOCK AND LOAD METADATA
 	## Open metadata file, lock it, and read contents
 	global metadataFile
-	metadataPath = os.path.join(scsroot,'client.meta')
+	metadataPath = os.path.join(conf['scsroot'],'client.meta')
 	try:
 		## Create client.meta if it does not exist
 		if not os.path.isfile(metadataPath):
@@ -963,14 +980,14 @@ T       bootstrap                  Set up SCS according to built-in defaults'''
 ################################################################################
 
 		elif action == 'packages':
-			metadict = fetchMetadata(metaurl)
+			metadict = fetchMetadata(conf['metaurl'])
 			output = ''
 			for pkgName in metadict['packages']:
 				data = metadict['packages'][pkgName]
 				if type(data).__name__=='dict':
 				
 					## Get the latest channel revision
-					remotePath  = svnroot + '/p_' + pkgName + '/'
+					remotePath  = conf['svnroot'] + '/p_' + pkgName + '/'
 
 					## Get the latest revision of the package
 					infoList = svnclient.info2(remotePath,recurse=False)
@@ -1045,7 +1062,7 @@ T       bootstrap                  Set up SCS according to built-in defaults'''
 			pkg = args[1]
 
 			if packageInstalled(pkg):
-				dataPath = os.path.join(scsroot,'packages',pkg,'data')
+				dataPath = os.path.join(conf['scsroot'],'packages',pkg,'data')
 				checkForLocalChanges(pkg)
 			else:
 				fatal('Package not installed',log=False)
@@ -1055,7 +1072,7 @@ T       bootstrap                  Set up SCS according to built-in defaults'''
 			pkg = args[1]
 
 			if packageInstalled(pkg):
-				dataPath = os.path.join(scsroot,'packages',pkg,'data')
+				dataPath = os.path.join(conf['scsroot'],'packages',pkg,'data')
 				checkForLocalChanges(pkg)
 			else:
 				fatal('Package not installed',log=False)
@@ -1063,7 +1080,7 @@ T       bootstrap                  Set up SCS according to built-in defaults'''
 ################################################################################
 
 		elif action == 'verify-all':
-			pkgs = os.listdir(os.path.join(scsroot,'packages'))
+			pkgs = os.listdir(os.path.join(conf['scsroot'],'packages'))
 			for pkg in pkgs:
 				output('Checking for local changes to pkg "' + pkg + '"')
 				checkForLocalChanges(pkg)
@@ -1074,7 +1091,7 @@ T       bootstrap                  Set up SCS according to built-in defaults'''
 			pkg = args[1]
 
 			if packageInstalled(pkg):
-				dataPath = os.path.join(scsroot,'packages',pkg,'data')
+				dataPath = os.path.join(conf['scsroot'],'packages',pkg,'data')
 				listFiles(pkg)
 			else:
 				fatal('No such package')
@@ -1082,7 +1099,7 @@ T       bootstrap                  Set up SCS according to built-in defaults'''
 ################################################################################
 
 		elif action == 'files-all':
-			pkgs = os.listdir(os.path.join(scsroot,'packages'))
+			pkgs = os.listdir(os.path.join(conf['scsroot'],'packages'))
 			for pkg in pkgs:
 				output(pkg + ':')
 				listFiles(pkg)
@@ -1091,9 +1108,9 @@ T       bootstrap                  Set up SCS according to built-in defaults'''
 
 		elif action == 'owner' and len(args) == 2:
 			f = args[1]
-			pkgs = os.listdir(os.path.join(scsroot,'packages'))
+			pkgs = os.listdir(os.path.join(conf['scsroot'],'packages'))
 			for pkg in pkgs:
-				propList = svnclient.proplist(os.path.join(scsroot,'packages',pkg,'data'),recurse=True)
+				propList = svnclient.proplist(os.path.join(conf['scsroot'],'packages',pkg,'data'),recurse=True)
 
 				for propSet in propList:
 					source     = propSet[0]
@@ -1112,7 +1129,7 @@ T       bootstrap                  Set up SCS according to built-in defaults'''
 			pkg = args[1]
 
 			## Get metadata from server
-			metadict = fetchMetadata(metaurl)
+			metadict = fetchMetadata(conf['metaurl'])
 
 			## See if the package requested actually exists
 			found = False
@@ -1136,14 +1153,14 @@ T       bootstrap                  Set up SCS according to built-in defaults'''
 ################################################################################
 
 		elif action == 'channels':
-			metadict = fetchMetadata(metaurl)
+			metadict = fetchMetadata(conf['metaurl'])
 			output = ''
 			for cName in metadict['channels']:
 				data = metadict['channels'][cName]
 				if type(data).__name__=='dict':
 				
 					## Get the latest channel revision
-					remotePath  = svnroot + '/c_' + cName + '/'
+					remotePath  = conf['svnroot'] + '/c_' + cName + '/'
 
 					## Get the latest revision of the package
 					infoList = svnclient.info2(remotePath,recurse=False)
@@ -1190,12 +1207,12 @@ T       bootstrap                  Set up SCS according to built-in defaults'''
 
 		elif action == 'subscribe' and len(args) == 2:
 			channel    = args[1]
-			remotePath = svnroot + '/c_' + channel + '/'
-			localPath  = os.path.join(scsroot,'channels',channel)
+			remotePath = conf['svnroot'] + '/c_' + channel + '/'
+			localPath  = os.path.join(conf['scsroot'],'channels',channel)
 			localPkgs  = os.path.join(localPath,'packages')
 
 			## Get package info from server
-			metadict = fetchMetadata(metaurl)
+			metadict = fetchMetadata(conf['metaurl'])
 
 			## See if the package requested actually exists
 			found = False
@@ -1294,7 +1311,7 @@ T       bootstrap                  Set up SCS according to built-in defaults'''
 
 		elif action == 'unsubscribe':
 			channel    = args[1]
-			localPath  = os.path.join(scsroot,'channels',channel)
+			localPath  = os.path.join(conf['scsroot'],'channels',channel)
 			localPkgs  = os.path.join(localPath,'packages')
 
 			if not channelSubscribed(channel):
@@ -1340,7 +1357,7 @@ T       bootstrap                  Set up SCS according to built-in defaults'''
 			output = ''
 
 			for channel in metadataDict['channels']:
-				remotePath   = svnroot + '/c_' + channel + '/'
+				remotePath   = conf['svnroot'] + '/c_' + channel + '/'
 
 				## Get latest remote revision
 				infoList = svnclient.info2(remotePath,recurse=False)
@@ -1363,7 +1380,7 @@ T       bootstrap                  Set up SCS according to built-in defaults'''
 			updateChannel(channel)
 
 		elif action == 'update-all':
-			channels = os.listdir(os.path.join(scsroot,'channels'))
+			channels = os.listdir(os.path.join(conf['scsroot'],'channels'))
 			for channel in channels:
 				updateChannel(channel)
 
