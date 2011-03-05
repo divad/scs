@@ -17,6 +17,8 @@ import fcntl
 import logging
 import logging.handlers
 import errno
+import smtplib
+from email.mime.text import MIMEText
 
 ## TODO
 # e-mail fault response							1		(easy)
@@ -366,6 +368,7 @@ def uninitPkg(pkg):
 def updateChannel(channel):
 	debug('updateChannel() called')
 	global metadataDict
+	global conf
 	svnclient = pysvn.Client()
 
 	if channelSubscribed(channel):	
@@ -406,46 +409,60 @@ def updateChannel(channel):
 
 					## Result of pkgInit
 					if result > 0:
-					
-						## TODO in each of the following we MUST send an e-mail
-						import smtplib
-						from email.mime.text import MIMEText
-						msg = MIMEText('This is a test')
-						msg['Subject'] = 'The subject goes here'
-						msg['From'] = 'from'
-						msg['To'] = 'to'
-						
-						s = smtplib.SMTP('rcfg.soton.ac.uk',25)
-						s.sendmail('root@localhost', 'notify@scs.soton.ac.uk', msg.as_string())
-						s.quit()
-					
+
+						errmsg = '';
+											
+				
 						if result == 1:
 							## A pre-script failed
-							fatal("Could not upgrade channel. Please correct the error and try to upgrade again")
-							return 1
+							errmsg = "Could not upgrade channel. Please correct the error and try to upgrade again"
+							
 						elif result == 5:
 							## Package is suspended
-							fatal("Package is currently suspended. Please correct the error and try to upgrade again")
+							errmsg = "Package is currently suspended. Please correct the error and try to upgrade again"
+							
 						elif  result == 6:
 							## Package does not exist
-							fatal("Package does not exist. Please correct the error and try to upgrade again")
+							errmsg = "Package does not exist. Please correct the error and try to upgrade again"
+							
 						else:
 							## A failure condition where the package should now be suspended
 							
 							if result == 2:
 								## Property application failed - major fault
 								suspendPackage(properties['name'],"A major fault occured when applying package properties")
+								
 							elif result == 3:
 								## Property allocation failed - minor fault
 								suspendPackage(properties['name'],"A minor fault occured when applying package properties")
+								
 							elif result == 4:
 								## Post-script returned non-zero
 								suspendPackage(properties['name'],"A post script returned an error after package installation")
+								
 							elif result == 7:
 								## Changed files detected that fail the package upgrade
 								suspendPackage(properties['name'],"One or more files have been changed locally")
 
-							fatal("Package suspended. Channel could not be updated.")
+							errmsg = "Package suspended. Channel could not be updated."
+					
+
+					## Alert email
+					if not conf['mailaddr'] == None:
+						msg = MIMEText(errmsg)
+						msg['Subject'] = 'scs on HOSTNAME: Could not update channel `' + channel + '`'
+						msg['From'] = 'from'
+						msg['To'] = 'to'
+					
+						smtp = smtplib.SMTP(conf['smtp'])
+						smtp.sendmail('root@null', conf['mailaddr'], msg.as_string())
+						smtp.quit()
+					
+					## Print error
+					error(errmsg)
+					
+					## Return 1 to say we failed
+					return 1
 
 			elif properties.has_key('name') and properties.has_key('action'):
 				if properties['action'] == 'remove':
@@ -896,9 +913,12 @@ T       bootstrap                  Set up SCS according to built-in defaults'''
 
 	global conf
 	conf = {}
-	conf['scsroot'] = '/opt/scs/'
-	conf['svnroot'] = ''
-	conf['metaurl'] = ''
+	conf['scsroot']  = '/opt/scs/'
+	conf['svnroot']  = ''
+	conf['metaurl']  = ''
+	conf['smtp']     = 'rcfg.soton.ac.uk'
+	#conf['mailaddr'] = None
+	conf['mailaddr'] = 'notify@scs.soton.ac.uk'
 	
 	## log file
 	if config.has_option('client','log file'):
@@ -924,6 +944,14 @@ T       bootstrap                  Set up SCS according to built-in defaults'''
 		conf['metaurl'] = config.get('client','metadata url')
 	else:
 		fatal('No metadata url defined in ' + options.config)
+		
+	## email options
+	if config.has_option('client','smtp server'):
+		configValue = config.get('client','smtp server')
+		conf['smtp'] = configValue
+	if config.has_option('client','notify email'):
+		configValue = config.get('client','notify email')
+		conf['mailaddr'] = configValue		
 
 	#### LOCK AND LOAD METADATA
 	## Open metadata file, lock it, and read contents
