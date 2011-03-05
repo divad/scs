@@ -10,6 +10,7 @@ import shutil
 import fcntl
 import re
 import subprocess
+import errno
 
 ## functions starting with lowercase 's' are for the server component only
 ## functions starting with lowercase 'c' are for the client component only
@@ -64,9 +65,12 @@ def sLockAndLoad(metadataPath):
 
 	try:
 		metafileHandle = open(metadataPath,'r+')
-		fcntl.flock(metafileHandle,fcntl.LOCK_EX)
-	except (IOError, OSError) as e:
-		fatal('Unable to lock ' + str(e.filename) + ': ' + str(e.strerror))
+		fcntl.lockf(metafileHandle,fcntl.LOCK_EX | fcntl.LOCK_NB)
+	except (IOError, OSError) as exception:
+		if exception.errno == errno.EAGAIN or exception.errno == errno.EACCES:
+			fatal('Sorry, another process is currently executing - try again later')
+		else:
+			fatal('Unable to lock metadata: ' + str(exception.filename) + ': ' + str(exception.strerror))
 
 	try:
 		jsonData = metafileHandle.read()
@@ -83,6 +87,9 @@ def sLockAndLoad(metadataPath):
 			metadict = json.loads(jsonData)
 		except (TypeError,ValueError) as e:
 			fatal('Unable to understand metadata: ' + str(e))
+	
+	## NOTE! We never bother to LOCK_UN via fcntl because fcntl does this anyway
+	## when you close the file handle which will happen either at exit, or .close()
 			
 	return metadict
 	
