@@ -6,23 +6,25 @@
 
 When processing files in the data/ directory of a package 
 
+== dest ==
+
 == action ==
 
 === copy ===
 
-Copy the file to the location specified.
+Copy the file to the location specified by "dest"
 
 === link ===
 
-Link the file to the location specified.
+Link the file to the location specified by "dest"
 
 === linkr ===
 
-Link the file, overwriting (recursively if its a directory) if it exists, to the location specified. 
+Link the file, overwriting (recursively if its a directory) if it exists, to the location specified by "dest".
 
 === linko ===
 
-Link the file, overwriting if it exists, to the location specified.
+Link the file, overwriting if it exists, to the location specified by "dest".
 
 == chmod ==
 
