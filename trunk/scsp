@@ -29,13 +29,13 @@ def main():
 	(options, args) = parser.parse_args()
 
 	## Load configuration variables
-	(svnroot,scsmroot,metadataPath) = scslib.sLoadConfig(options.config);
+	conf = scslib.sLoadConfig(options.config);
 
 	## Load subversion library
 	svnclient = pysvn.Client()
 
 	## Build package path
-	pkgcodir  = os.path.join(scsmroot,'packages')
+	pkgcodir  = os.path.join(conf['scsmroot'],'packages')
 
 	## Deal with no args
 	if len(args) <= 0:
@@ -51,7 +51,7 @@ def main():
 	#### PACKAGE CREATE ####################################################
 	if action == 'create' and len(args) == 2:
 		name = args[1]
-		svnpath = os.path.join(svnroot,'p_' + name)
+		svnpath = os.path.join(conf['svnroot'],'p_' + name)
 
 		## Make sure it does not exist
 		if metadict['packages'].has_key(name):
@@ -123,7 +123,7 @@ def main():
 		if not metadict['packages'].has_key(name):
 			fatal("Sorry, that package does not exist")
 		else:
-			scslib.sDeleteSVN(os.path.join(svnroot,'p_' + name),'package')
+			scslib.sDeleteSVN(os.path.join(conf['svnroot'],'p_' + name),'package')
 			del(metadict['packages'][name])
 
 	#### PACKAGE LIST ######################################################

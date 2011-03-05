@@ -25,11 +25,14 @@ def fatal(msg,code=1):
 ################################################################################	
 
 def sLoadConfig(configFile):
-	#### Variable defaults
-	svnroot  = '/opt/scsm/svn/'
-	scsmroot = '/opt/scsm/scsm/'
-	metafilePath = '/opt/scsm/www/server.meta'
-	
+
+	## Defaults
+	conf = {
+		'svnroot': '/opt/scsm/svn/',
+		'scsmroot': '/opt/scsm/',
+		'metafilePath': '/opt/scsm/www/server.meta'
+	}
+
 	#### LOAD CONFIG
 	config = ConfigParser.RawConfigParser()
 	config.read(configFile)
@@ -37,26 +40,26 @@ def sLoadConfig(configFile):
 	if config.has_option('server','svn root'):
 		configValue = config.get('server','svn root')
 		if os.path.isdir(configValue):
-			svnroot = configValue
+			conf['svnroot'] = configValue
 		else:
 			fatal('The subversion root specified in ' + configFile + ' is not a directory')
 
 	if config.has_option('server','metadata file'):
 		configValue = config.get('server','metadata file')
 		if os.path.isfile(configValue):
-			metafilePath = configValue
+			conf['metafilePath'] = configValue
 		else:
 			fatal('The metadata file specified in ' + configFile + ' is not a file')
 
 	if config.has_option('server','scsm root'):
 		configValue = config.get('server','scsm root')
 		if os.path.isdir(configValue):
-			scsmroot = configValue
+			conf['scsmroot'] = configValue
 		else:
 			fatal('The scsm root specified in ' + configFile + ' is not a directory')
-			
-	return (svnroot,scsmroot,metafilePath)
-	
+
+	return conf
+
 ################################################################################
 
 def sLockAndLoad(metadataPath):
