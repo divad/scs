@@ -56,6 +56,7 @@ T   info      NAME      Show channel contents
 
 	## Build other paths
 	chancodir = os.path.join(conf['scsmroot'],'channels')
+	pkgcodir  = os.path.join(conf['scsmroot'],'packages')	
 			
 	## Shortcut to action
 	action = args[0]
