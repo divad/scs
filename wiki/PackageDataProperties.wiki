@@ -2,24 +2,42 @@
 
 <wiki:toc max_depth="1" />
 
-= action =
+= overview =
 
-== copy ==
+When processing files in the data/ directory of a package 
 
-== link ==
+== action ==
 
-== linkr ==
+=== copy ===
 
-== linko ==
+Copy the file to the location specified.
 
-= chmod =
+=== link ===
 
-= owner = 
+Link the file to the location specified.
 
-= group =
+=== linkr ===
 
-= uid =
+Link the file, overwriting (recursively if its a directory) if it exists, to the location specified. 
 
-= gid =
+=== linko ===
 
-= immutable =
+Link the file, overwriting if it exists, to the location specified.
+
+== chmod ==
+
+Set the octal permissions.
+
+== owner ==
+
+Set the owner.
+
+== group ==
+
+Set the group.
+
+== uid ==
+
+== gid ==
+
+== immutable ==
