@@ -43,7 +43,7 @@ def main():
 		return
 		
 	## Get metadata
-	metadict = scslib.sLockAndLoad(metadataPath)		
+	metadict = scslib.sLockAndLoad(conf['metadataPath'])
 			
 	## Shortcut to action
 	action = args[0]
