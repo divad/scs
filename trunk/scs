@@ -322,7 +322,7 @@ def fetchMetadata(metadataUrl):
 		jsonData = f.read()
 		f.close()
 	except IOError as e:
-		fatal('Unable to read from ' + e.filename + ': ' + e.strerror)
+		fatal('Unable to read from ' + str(e.filename) + ': ' + str(e.strerror))
 
 	try:
 		metadict = json.loads(jsonData)
@@ -1254,7 +1254,7 @@ T       bootstrap                  Set up SCS according to built-in defaults'''
 				fatal('No such channel exists on the server')
 
 			if metadict['channels'][channel].has_key('desc'):
-				channelDescription = metadict['channels'][pkg]['desc']
+				channelDescription = metadict['channels'][channel]['desc']
 			else:
 				channelDescription = ''
 
