@@ -1,6 +1,6 @@
 #summary Documentation for every property that can be set against package data
 
-<wiki:toc max_depth="1" />
+<wiki:toc max_depth="2" />
 
 = overview =
 
