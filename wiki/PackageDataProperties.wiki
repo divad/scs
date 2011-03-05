@@ -8,6 +8,28 @@ When processing files in the data/ directory of a package
 
 == dest ==
 
+== check ==
+
+If the file has been modified locally after package revision 1 is installed, on upgrade to package revision 2 the file will be overwritten with the contents of package 2 - if any.
+
+You can control this behaviour on a per-file basis:
+
+=== ignore ===
+
+Silently ignore the local change and overwrite its contents from the new package revision. 
+
+=== warn (Default) ===
+
+Ignore the local change and overwrite its contents from the new package revision. This logs a warning during upgrade. 
+
+=== fail ===
+
+The package revision upgrade does not take place, instead the whole package will be suspended pending administrator input (they can then use --force to override local changes on the command line).
+
+=== skip ===
+
+The package is still upgraded but this file is skipped from the upgrade process altogether. This is not recommended but in certain cases this might be useful.
+
 == action ==
 
 === copy ===
