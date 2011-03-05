@@ -895,6 +895,7 @@ T       bootstrap                  Set up SCS according to built-in defaults'''
 	config.read(options.config)
 
 	global conf
+	conf = {}
 	conf['scsroot'] = '/opt/scs/'
 	conf['svnroot'] = ''
 	conf['metaurl'] = ''
