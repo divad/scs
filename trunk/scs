@@ -16,6 +16,7 @@ from optparse import OptionParser, OptionGroup
 import fcntl
 import logging
 import logging.handlers
+import errno
 
 ## TODO
 # e-mail fault response							1		(easy)
@@ -26,7 +27,8 @@ import logging.handlers
 # new actions "pkg-info" and "chan-info" ??		3
 	# pkg-info will just print fields
 	# channel info will print channel members
-# move def's to scslib (easy)					4
+	
+# move def's to scslib??						4
 
 def saveMetadata():
 	global metadataDict
@@ -134,6 +136,13 @@ def checkForLocalChanges(pkg):
 	ignoreList = []
 	svnclient = pysvn.Client()
 	propList = svnclient.proplist(os.path.join(scsroot,'packages',pkg,'data'),recurse=True)
+	
+	## Return code
+	# 0 - no locally changed files
+	# 1 - locally changed files, but they were all skipped
+	# 2 - locally changed files, but they were all skipped or warned about
+	# 3 - locally changed files, DO NOT PROCEED!
+	retcode = 0
 
 	for propSet in propList:
 		source     = propSet[0]
@@ -141,7 +150,6 @@ def checkForLocalChanges(pkg):
 
 		if 'dest' in properties:
 			dest = properties['dest']
-
 			debug('Checking for local changes on file: ' + dest,log=True)
 
 			## Get SHA sums
@@ -156,7 +164,7 @@ def checkForLocalChanges(pkg):
 
 					info('The file ' + dest + ' has been modified outside of SCS control',log=True)
 
-					## TODO FUTURE make the default come from a revprop?
+					## TODO FUTURE make the default come from a revprop? (difficult...)
 					checkAction = 'ignore'
 
 					if 'check' in properties:
@@ -165,16 +173,17 @@ def checkForLocalChanges(pkg):
 					debug('The file has been configured to "' + checkAction + '" in this scenario',log=True)
 
 					if checkAction == 'fail':
-						output("ERROR! Local changes found to file " + dest)
-						output("ERROR! Transaction failed. Could not init pkg")
-						return 1
+						retcode = 3
+						output("ERROR! Local changes found to file " + dest)						
 					elif checkAction == 'warn':
+						retcode = 2					
 						output("WARNING! Local changes found to file " + dest)
 					elif checkAction == 'skip':
+						retcode = 1					
 						## add the file to the "ignore" list
 						ignoreList.append(source)
-
-	return ignoreList
+						
+	return (retcode, ignoreList)
 
 ################################################################################
 ################################################################################
@@ -410,6 +419,10 @@ def updateChannel(channel):
 								suspendPackage(properties['name'],"A post script returned an error after package installation")
 							elif result == 5:
 								fatal("Package is currently suspended. Could not update channel.")
+							elif result == 6:
+								fatal("Package does not exist. Could not subscribe to channel.")
+							elif result == 7:
+								suspendPackage(properties['name'],"One or more files have been changed locally")							
 
 							fatal("Package suspended. Channel could not be updated.")
 
@@ -425,8 +438,7 @@ def updateChannel(channel):
 			else:
 				warn('Warning! Channel upgrade file does not have properties set against it!')
 
-		## Update packages (Although we don't actually use them until an unsubscribe - but they are there if an admin wants them)
-		## NOTE! Updating this means SCS will think the channel is updated, hence why we do it here.
+		## Update package info (Although we don't actually use the info until an unsubscribe - but they are there if an admin wants them)
 		svnclient.update(localPkgs,revision=revisionToUse)
 
 		## Save new revision
@@ -448,11 +460,12 @@ def updateChannel(channel):
 
 #### RETURN CODES for initPkg:
 ## 1 = Pre-script failed, package not installed
-## 2 = MAJOR fault during inst
-## 3 = Minor fault during inst
+## 2 = MAJOR fault during property application
+## 3 = Minor fault during property application
 ## 4 = Non-zero exit from a post-script
 ## 5 = Package is currently suspended
 ## 6 = No such package
+## 7 = Local changes detected during upgrade
 
 def initPkg(pkg,rev=-1):
 	global scsroot
@@ -535,7 +548,12 @@ def initPkg(pkg,rev=-1):
 		## If we shouldn't then check for local changes
 		if not ignore:
 			info('Checking for local changes',log=True)
-			ignoreList = checkForLocalChanges(pkg)
+			(localChangesResult,ignoreList) = checkForLocalChanges(pkg)
+			
+		## If local changes were detected and we must not proceed because of them...
+		if localChangesResult == 3:
+			error('One or more files have been changed locally, this must be corrected before upgrading')
+			return 7
 
 		## Pre-increment ("pre-upgrade") script
 		(scode,sout) = runScript(pkg,'preinc')
@@ -806,13 +824,13 @@ def main():
         packages                   List all available packages
         init          PACKAGE      Install/upgrade package (Not recommended)
         uninit        PACKAGE      Remove package (Not recommended)
-		status        PACKAGE      Show the package status
+        status        PACKAGE      Show the package status
 
     Package maintenance functions: 
 
         verify        PACKAGE      Verify system conforms to package spec
         verify-all                 Verify system conforms to all package specs
-		files         PACKAGE      List files which are part of PACKAGE
+        files         PACKAGE      List files which are part of PACKAGE
         files-all                  List files from all packages
         owner         FILEPATH     Determine if FILEPATH is owned by a package
         suspend       CHANNEL      Lock a package so it cannot be updated
@@ -897,17 +915,20 @@ T       bootstrap                  Set up SCS according to built-in defaults'''
 		## Create client.meta if it does not exist
 		if not os.path.isfile(metadataPath):
 			open(metadataPath,'w')
-
+			
 		metadataFile = open(metadataPath,'r+')
-		fcntl.flock(metadataFile,fcntl.LOCK_EX)
-	except (IOError, OSError) as e:
-		fatal('Unable to lock ' + str(e.filename) + ': ' + str(e.strerror))
+		fcntl.lockf(metadataFile,fcntl.LOCK_EX | fcntl.LOCK_NB)
+		
+	except (IOError, OSError) as exception:
+		if exception.errno == errno.EAGAIN or exception.errno == errno.EACCES:
+			fatal('Sorry, another process is currently executing - try again later')
+		else:
+			fatal('Unable to lock ' + str(exception.filename) + ': ' + str(exception.strerror))
 
 	try:
 		jsonData = metadataFile.read()
 		metadataFile.seek(0)
 	except (IOError, OSError) as e:
-		fcntl.flock(metadataFile,fcntl.LOCK_UN)
 		fatal('Unable to read from ' + e.filename + ': ' + e.strerror)
 
 	## Handle empty data
@@ -918,7 +939,6 @@ T       bootstrap                  Set up SCS according to built-in defaults'''
 		try:
 			metadataDict = json.loads(jsonData)
 		except (TypeError,ValueError) as e:
-			fcntl.flock(metadataFile,fcntl.LOCK_UN)
 			fatal('Unable to understand metadata: ' + str(e))
 
 	#### SWTICH ACTIONS
@@ -1251,6 +1271,10 @@ T       bootstrap                  Set up SCS according to built-in defaults'''
 								suspendPackage(pkgT[1],"A post script returned an error after package installation")
 							elif result == 5:
 								fatal("Package is currently suspended. Could not subscribe to channel.")
+							elif result == 6:
+								fatal("Package does not exist. Could not subscribe to channel.")
+							elif result == 7:
+								suspendPackage(pkgT[1],"One or more files have been changed locally")
 
 							fatal("Package suspended. Could not subscribe to channel.")
 
