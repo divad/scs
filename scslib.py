@@ -30,7 +30,7 @@ def sLoadConfig(configFile):
 	conf = {
 		'svnroot': '/opt/scsm/svn/',
 		'scsmroot': '/opt/scsm/',
-		'metafilePath': '/opt/scsm/www/server.meta'
+		'metadataPath': '/opt/scsm/www/server.meta'
 	}
 
 	#### LOAD CONFIG
@@ -47,7 +47,7 @@ def sLoadConfig(configFile):
 	if config.has_option('server','metadata file'):
 		configValue = config.get('server','metadata file')
 		if os.path.isfile(configValue):
-			conf['metafilePath'] = configValue
+			conf['metadataPath'] = configValue
 		else:
 			fatal('The metadata file specified in ' + configFile + ' is not a file')
 
