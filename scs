@@ -32,6 +32,10 @@ from email.mime.text import MIMEText
 	
 # move def's to scslib??						4
 
+# sub channels ?
+# force-all command
+# check is taken from /PREVIOUS/ revision...is that a good thing?
+
 def saveMetadata():
 	global metadataDict
 	global metadataFile
@@ -164,10 +168,11 @@ def checkForLocalChanges(pkg):
 				## Compare sums
 				if not sourceh == desth:
 
-					info('The file ' + dest + ' has been modified outside of SCS control',log=True)
+					debug('The file ' + dest + ' has been modified outside of SCS control',log=True)
 
 					## TODO FUTURE make the default come from a revprop? (difficult...)
-					checkAction = 'ignore'
+					# default is warn - i.e. it overwrites
+					checkAction = 'warn'
 
 					if 'check' in properties:
 						checkAction = properties['check']
@@ -176,10 +181,10 @@ def checkForLocalChanges(pkg):
 
 					if checkAction == 'fail':
 						retcode = 3
-						output("ERROR! Local changes found to file " + dest)						
+						error("Local changes found in package " + pkg + ", file " + dest)						
 					elif checkAction == 'warn':
 						retcode = 2					
-						output("WARNING! Local changes found to file " + dest)
+						warn("WARNING! Local changes found to file " + dest)
 					elif checkAction == 'skip':
 						retcode = 1					
 						## add the file to the "ignore" list
@@ -393,6 +398,7 @@ def updateChannel(channel):
 			info('Channel "' + channel + '" is up to date')
 			return
 		else:
+			info('Updating channel "' + channel + '" to revision ' + str(localRevision +1))
 			revisionToUse = pysvn.Revision(pysvn.opt_revision_kind.number, localRevision + 1)
 
 		## No need to download the upgrade file, we'll just read its properties from remote :)
@@ -411,58 +417,70 @@ def updateChannel(channel):
 					if result > 0:
 
 						errmsg = '';
+						mailmsg = '';
 											
 				
 						if result == 1:
 							## A pre-script failed
 							errmsg = "Could not upgrade channel. Please correct the error and try to upgrade again"
-							
+							mailmsg = "A pre script returned non-zero upon execution"
+
 						elif result == 5:
 							## Package is suspended
-							errmsg = "Package is currently suspended. Please correct the error and try to upgrade again"
-							
+							errmsg = "Could not upgrade channel. Please correct the error and try to upgrade again"
+							mailmsg = "Package is currently suspended: " + metadataDict['packages'][properties['name']]['suspend_reason']
+
 						elif  result == 6:
 							## Package does not exist
-							errmsg = "Package does not exist. Please correct the error and try to upgrade again"
+							errmsg = "Could not upgrade channel. Please correct the error and try to upgrade again"
+							mailmsg = "Package does not exist"
 							
 						else:
 							## A failure condition where the package should now be suspended
 							
+							reason = ''
+							
 							if result == 2:
 								## Property application failed - major fault
-								suspendPackage(properties['name'],"A major fault occured when applying package properties")
+								reason = "A major fault occured when applying package properties"
 								
 							elif result == 3:
 								## Property allocation failed - minor fault
-								suspendPackage(properties['name'],"A minor fault occured when applying package properties")
+								reason = "A minor fault occured when applying package properties"
 								
 							elif result == 4:
 								## Post-script returned non-zero
-								suspendPackage(properties['name'],"A post script returned an error after package installation")
+								reason = "A post script returned an error after package installation"
 								
 							elif result == 7:
 								## Changed files detected that fail the package upgrade
-								suspendPackage(properties['name'],"One or more files have been changed locally")
+								reason = "One or more files have been changed locally"
 
-							errmsg = "Package suspended. Channel could not be updated."
-					
+							mailmsg = reason
+							suspendPackage(properties['name'],reason)
+							errmsg = "Package " + properties['name'] + " now suspended. Channel could not be updated."
 
-					## Alert email
-					if not conf['mailaddr'] == None:
-						msg = MIMEText(errmsg)
-						msg['Subject'] = 'scs on HOSTNAME: Could not update channel `' + channel + '`'
-						msg['From'] = 'from'
-						msg['To'] = 'to'
+						## Alert email
+						if not conf['mailaddr'] == None:
+						
+							text  = "An error occured whilst trying to update the channel '" + channel + "'\n"
+							text += "The error occured within the package '" + properties['name'] + "'\n"
+							text += "Reason: " + mailmsg
+							
+							msg = MIMEText(text)
+							msg['Subject'] = "scs on HOST failed to update channel '" + channel + "'"
+							msg['From'] = 'root@null'
+							msg['To'] = conf['mailaddr']
 					
-						smtp = smtplib.SMTP(conf['smtp'])
-						smtp.sendmail('root@null', conf['mailaddr'], msg.as_string())
-						smtp.quit()
+							smtp = smtplib.SMTP(conf['smtp'])
+							smtp.sendmail('root@null', conf['mailaddr'], msg.as_string())
+							smtp.quit()
 					
-					## Print error
-					error(errmsg)
+						## Print error
+						error(errmsg)
 					
-					## Return 1 to say we failed
-					return 1
+						## Return 1 to say we failed
+						return 1
 
 			elif properties.has_key('name') and properties.has_key('action'):
 				if properties['action'] == 'remove':
@@ -557,13 +575,8 @@ def initPkg(pkg,rev=-1):
 	if packageInstalled(pkg):
 		upgrade = True
 
-		## Is the package suspended?
-
-		if isPackageSuspended(pkg):
-			error("Package '" + pkg + "' is suspended due to: " + metadataDict['packages'][pkg]['suspend_reason'])
-			return 5
-
 		## Get local revision installed
+		## TODO get this from METADATA INSTEAD?!
 		infoList = svnclient.info2(localData,recurse=False)
 		for infoTuple in infoList:
 			infoDict = infoTuple[1]
@@ -575,9 +588,14 @@ def initPkg(pkg,rev=-1):
 		else:
 			revisionToUse = pysvn.Revision(pysvn.opt_revision_kind.number, int(localRevision) + 1)
 
-		## TODO FUTURE get revprop to see if we should skip this revision or not
+		info('Updating package "' + pkg + '" to revision ' + str(revisionToUse.number),log=True)
+			
+		## Is the package suspended?
+		if isPackageSuspended(pkg):
+			error("Package '" + pkg + "' is currently suspended: " + metadataDict['packages'][pkg]['suspend_reason'])
+			return 5			
 
-		info('Upgrading ' + pkg + ' to revision ' + str(revisionToUse.number),log=True)
+		## TODO FUTURE get revprop to see if we should skip this revision or not
 
 		## Should we ignore local changes?
 		ignore = options.ignore
@@ -1111,7 +1129,7 @@ T       bootstrap                  Set up SCS according to built-in defaults'''
 		elif action == 'verify-all':
 			pkgs = os.listdir(os.path.join(conf['scsroot'],'packages'))
 			for pkg in pkgs:
-				output('Checking for local changes to pkg "' + pkg + '"')
+				debug('Checking for local changes to pkg "' + pkg + '"',log=True)
 				checkForLocalChanges(pkg)
 
 ################################################################################
@@ -1130,7 +1148,7 @@ T       bootstrap                  Set up SCS according to built-in defaults'''
 		elif action == 'files-all':
 			pkgs = os.listdir(os.path.join(conf['scsroot'],'packages'))
 			for pkg in pkgs:
-				output(pkg + ':')
+				info(pkg + ':')
 				listFiles(pkg)
 
 ################################################################################
@@ -1409,8 +1427,7 @@ T       bootstrap                  Set up SCS according to built-in defaults'''
 			updateChannel(channel)
 
 		elif action == 'update-all':
-			channels = os.listdir(os.path.join(conf['scsroot'],'channels'))
-			for channel in channels:
+			for channel in metadataDict['channels']:
 				updateChannel(channel)
 
 ################################################################################

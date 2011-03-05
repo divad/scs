@@ -35,6 +35,7 @@ def main():
 	svnclient = pysvn.Client()
 
 	## Build package path
+	
 	pkgcodir  = os.path.join(conf['scsmroot'],'packages')
 
 	## Deal with no args
