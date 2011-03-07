@@ -36,6 +36,7 @@ from email.mime.text import MIMEText
 # force-all command
 # check is taken from /PREVIOUS/ revision...is that a good thing?
 
+
 def saveMetadata():
 	global metadataDict
 	global metadataFile
@@ -462,7 +463,6 @@ def updateChannel(channel):
 
 						## Alert email
 						if not conf['mailaddr'] == None:
-						
 							text  = "An error occured whilst trying to update the channel '" + channel + "'\n"
 							text += "The error occured within the package '" + properties['name'] + "'\n"
 							text += "Reason: " + mailmsg
