@@ -108,7 +108,7 @@ def sListChannel(chandict,metadict,depth):
 
 	## Channel print
 	if chandict.has_key('desc'):
-		print depthStr + chandict['name'] + '(' + chandict['desc'] + ')'
+		print depthStr + chandict['name'] + ' (' + chandict['desc'] + ')'
 	else:
 		print depthStr + chandict['name']
 		
