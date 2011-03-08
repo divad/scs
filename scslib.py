@@ -105,13 +105,13 @@ def sListChannel(chandict,metadict,depth):
 	if depth >= 0:
 		for i in range(depth):
 			depthStr += ' '
-		depthStr += '\-'
+		depthStr += '\- '
 
 	## Channel print
 	if chandict.has_key('desc'):
-		output += depthStr + ' ' + '{0:14}  {1:64}'.format(chandict['name'],chandict['desc'])
+		output += depthStr + '{0:14}  {1:64}'.format(chandict['name'],chandict['desc'])
 	else:
-		output += depthStr + ' ' + '{0:14}  {1:64}'.format(chandict['name'],'N/A')
+		output += depthStr + '{0:14}  {1:64}'.format(chandict['name'],'N/A')
 		
 	## Child channels
 	for channame in metadict['channels']:	
