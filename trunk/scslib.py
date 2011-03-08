@@ -114,7 +114,7 @@ def sListChannel(chandict,metadict,depth):
 	## Child channels
 	for channame in metadict['channels']:	
 		if metadict['channels'][channame].has_key('parent'):
-			warn(channame + ' ' + metadict['channels'][channame]['parent'])
+			print channame + ' ' + metadict['channels'][channame]['parent']
 			if metadict['channels'][channame]['parent'] == channame:
 				output += sListChannel(metadict['channels'][channame],depth+1)
 		
