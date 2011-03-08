@@ -132,7 +132,7 @@ T   info      NAME      Show channel contents
 		if not metadict['channels'].has_key(name):
 			fatal("That channel does not exist")
 		else:
-			scslib.sDeleteSVN(os.path.join(conf['svnroot'],name),'channel')
+			scslib.sDeleteSVN(os.path.join(conf['svnroot'],name))
 			shutil.rmtree(os.path.join(chancodir,name))
 			del(metadict['channels'][name])
 
