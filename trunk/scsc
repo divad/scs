@@ -138,7 +138,7 @@ T   info      NAME      Show channel contents
 
 	#### CHANNEL LIST ######################################################
 	elif action == 'list':
-		sListChannels()
+		scslib.sListChannels()
 
 	#### CHANNEL TAG #######################################################
 	elif action == 'tag' and len(args) == 3:
