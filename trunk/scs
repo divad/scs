@@ -22,19 +22,25 @@ from email.mime.text import MIMEText
 
 ## TODO
 # e-mail fault response							1		(easy)
+
 # bootstrap command?							5		(easy)
 	# create /opt/scs/ etc.
 	# create /etc/scs.conf with server as https://scs.domain/ and all other defaults
+	
 # description truncate?							2		(EASY)
+
 # new actions "pkg-info" and "chan-info" ??		3
 	# pkg-info will just print fields
 	# channel info will print channel members
 	
 # move def's to scslib??						4
 
-# sub channels ?
+# SUB CHANNEL
 # force-all command
 # check is taken from /PREVIOUS/ revision...is that a good thing?
+
+# cleanup initPkg so most stuff is done inside it rather than outside...
+# cleanup runScript like above.
 
 
 def saveMetadata():
@@ -378,7 +384,7 @@ def updateChannel(channel):
 	svnclient = pysvn.Client()
 
 	if channelSubscribed(channel):	
-		remotePath  = conf['svnroot'] + '/c_' + channel + '/'
+		remotePath  = conf['svnroot'] + channel + '/'
 		localPath   = os.path.join(conf['scsroot'],'channels',channel)
 		localPkgs   = os.path.join(localPath,'packages')
 		upgradeFile = remotePath + 'upgrade'
@@ -494,6 +500,8 @@ def updateChannel(channel):
 			else:
 				warn('Warning! Channel upgrade file does not have properties set against it!')
 
+		## TODO update sub channels
+
 		## Update package info (Although we don't actually use the info until an unsubscribe - but they are there if an admin wants them)
 		svnclient.update(localPkgs,revision=revisionToUse)
 
@@ -502,8 +510,10 @@ def updateChannel(channel):
 
 		## We're upgraded
 		if revisionToUse.number < latestRevision:
+		
 			## We need to recursive-call and upgrade again! :)
 			updateChannel(channel)
+			
 		else:
 			## We're done!
 			return 0
@@ -550,7 +560,7 @@ def initPkg(pkg,rev=-1):
 	svnclient = pysvn.Client()
 
 	## Work out paths
-	remotePath   = conf['svnroot'] + '/p_' + pkg + '/' 
+	remotePath   = conf['svnroot'] + pkg + '/' 
 	localPath    = os.path.join(conf['scsroot'],'packages',pkg)
 	localScripts = os.path.join(localPath,'scripts')
 	localData    = os.path.join(localPath,'data')
@@ -1034,7 +1044,7 @@ T       bootstrap                  Set up SCS according to built-in defaults'''
 				if type(data).__name__=='dict':
 				
 					## Get the latest channel revision
-					remotePath  = conf['svnroot'] + '/p_' + pkgName + '/'
+					remotePath  = conf['svnroot'] + pkgName + '/'
 
 					## Get the latest revision of the package
 					infoList = svnclient.info2(remotePath,recurse=False)
@@ -1207,7 +1217,7 @@ T       bootstrap                  Set up SCS according to built-in defaults'''
 				if type(data).__name__=='dict':
 				
 					## Get the latest channel revision
-					remotePath  = conf['svnroot'] + '/c_' + cName + '/'
+					remotePath  = conf['svnroot'] + cName + '/'
 
 					## Get the latest revision of the package
 					infoList = svnclient.info2(remotePath,recurse=False)
@@ -1254,14 +1264,14 @@ T       bootstrap                  Set up SCS according to built-in defaults'''
 
 		elif action == 'subscribe' and len(args) == 2:
 			channel    = args[1]
-			remotePath = conf['svnroot'] + '/c_' + channel + '/'
+			remotePath = conf['svnroot'] + channel + '/'
 			localPath  = os.path.join(conf['scsroot'],'channels',channel)
 			localPkgs  = os.path.join(localPath,'packages')
 
 			## Get package info from server
 			metadict = fetchMetadata(conf['metaurl'])
 
-			## See if the package requested actually exists
+			## See if the channel requested actually exists
 			found = False
 			for channelName in metadict['channels']:
 				if channelName == channel:
@@ -1279,6 +1289,8 @@ T       bootstrap                  Set up SCS according to built-in defaults'''
 			if channelSubscribed(channel):
 				info("Already subscribed to channel")
 			else:
+
+				## TODO SUB CHANNELS...
 
 				if not os.path.isdir(localPath):
 					## set up directory layout
@@ -1300,10 +1312,7 @@ T       bootstrap                  Set up SCS according to built-in defaults'''
 				## Now do a property walk to know what packages to install
 				propList = svnclient.proplist(localPkgs,recurse=True)
 
-				## If errors occured we should suspend the ch
-
 				pkgList = []
-
 				for propSet in propList:
 					fname      = propSet[0]
 					properties = propSet[1]
@@ -1318,7 +1327,10 @@ T       bootstrap                  Set up SCS according to built-in defaults'''
 				## use -pkg[0] for reverse
 				pkgList = sorted(pkgList, key=lambda pkg: pkg[0])
 				
+				## Install packages
 				for pkgT in pkgList:
+				
+					## Install it and get a result
 					result = initPkg(pkgT[1],rev=pkgT[2])
 
 					## Result of pkgInit
@@ -1348,7 +1360,7 @@ T       bootstrap                  Set up SCS according to built-in defaults'''
 					infoDict = infoTuple[1]
 					localRevision = infoDict['rev'].number
 
-				## Update metadata
+				## Update metadata with the new channel
 				metadataDict['channels'][channel] = { 'name': channel, 'revision': localRevision, 'desc' : channelDescription}
 
 				## Output
@@ -1404,7 +1416,7 @@ T       bootstrap                  Set up SCS according to built-in defaults'''
 			output = ''
 
 			for channel in metadataDict['channels']:
-				remotePath   = conf['svnroot'] + '/c_' + channel + '/'
+				remotePath   = conf['svnroot'] + channel + '/'
 
 				## Get latest remote revision
 				infoList = svnclient.info2(remotePath,recurse=False)

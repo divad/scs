@@ -113,7 +113,7 @@ def sSaveAndUnlock(metadict):
 	except (IOError, OSError) as error:
 		fatal('Failed to write metadata: ' + error.strerror + ' on ' + error.filename)
 
-def sCreateSVN(path,name,svntype):
+def sCreateSVN(path,name):
 	## Validate the name
 	regex = re.compile('^[a-zA-Z\_\-0-9]+$')
 	matched = regex.match(name)
@@ -122,7 +122,7 @@ def sCreateSVN(path,name,svntype):
 
 	## Check dir doesnt already exist
 	if os.path.exists(path):
-		fatal('That ' + svntype + ' already exists!')
+		fatal('A subversion repository with that name already exists')
 
 	svnadmin = subprocess.Popen(['svnadmin', 'create', path],stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 	(stdoutdata, stderrdata) = svnadmin.communicate()

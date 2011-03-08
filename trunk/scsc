@@ -36,7 +36,7 @@ T   info      NAME      Show channel contents
 	parser.add_option('-c','--config-file',dest='config',default="/etc/scs.conf",help='Set the configuration file to use')
 
 	group = OptionGroup(parser,"Options for 'create'")
-	#group.add_option('-p','--parent',default=None,dest='parent',help='Create the channel as an optional sub-channel by setting the parent channel')
+	group.add_option('-p','--parent',default=None,dest='parent',help='Set the parent channel for the channel (Creates a child channel)')
 	parser.add_option_group(group)
 	
 	group = OptionGroup(parser,"Options for 'tag'")
@@ -71,17 +71,23 @@ T   info      NAME      Show channel contents
 	if action == 'create' and len(args) == 2:
 		name = args[1]
 
-		if metadict['channels'].has_key(name):
-			fatal("Sorry, that channel already exists!")
-
+		## the name must be unique across packages and channels
+		if metadict['channels'].has_key(name) or metadict['packages'].has_key(name):
+			fatal("That name is already in use")
+			
+		## Create child channel if chosen
+		if not options.parent == None:
+			if not metadict['channels'].has_key(options.parent):
+				fatal("The name of the parent channel is invalid")
+				
 		## Workout the SVN root should be
-		svnpath = os.path.join(conf['svnroot'],'c_' + name)
+		svnpath = os.path.join(conf['svnroot'],name)
 
 		## Create it there
-		scslib.sCreateSVN(svnpath,name,'channel')
+		scslib.sCreateSVN(svnpath,name)
 
 		## Checkout
-		codir = os.path.join(chancodir,'c_' + name)
+		codir = os.path.join(chancodir,name)
 		svnclient.checkout('file://' + svnpath, codir)
 
 		## Create packages dir
@@ -112,8 +118,8 @@ T   info      NAME      Show channel contents
 	#### CHANNEL DELETE ####################################################
 	elif action == 'delete' and len(args) == 2:
 		name = args[1]
-		scslib.sDeleteSVN(os.path.join(conf['svnroot'],'c_' + name),'channel')
-		shutil.rmtree(os.path.join(chancodir,'c_' + name))
+		scslib.sDeleteSVN(os.path.join(conf['svnroot'],name),'channel')
+		shutil.rmtree(os.path.join(chancodir,name))
 
 	#### CHANNEL LIST ######################################################
 	elif action == 'list':
@@ -136,20 +142,22 @@ T   info      NAME      Show channel contents
 		## Setup variables
 		channelName     = args[1]
 		packageName     = args[2]
-		pkgSvnPath      = os.path.join(conf['svnroot'],'p_' + packageName)
-		pkgCheckout     = os.path.join(pkgcodir,'p_' + packageName)
-		channelCheckout = os.path.join(chancodir,'c_' + channelName)
+		pkgSvnPath      = os.path.join(conf['svnroot'],packageName)
+		pkgCheckout     = os.path.join(pkgcodir,packageName)
+		channelCheckout = os.path.join(chancodir,channelName)
 		pkgConfigFile   = os.path.join(channelCheckout,'packages',packageName)
 		pkgUpgradeFile  = os.path.join(channelCheckout,'upgrade')
 
 		if not metadict['channels'].has_key(channelName):
 			fatal("Sorry, that channel does not exist!")
+			
+			## TODO tag a channel as a channel (??)
 
 		if not metadict['packages'].has_key(packageName):
 			fatal("Sorry, that package does not exist!")
 
 		## Make sure channel is up-to-date
-		svnclient.update(os.path.join(chancodir,'c_' + channelName))
+		svnclient.update(os.path.join(chancodir,channelName))
 
 		## Checkout the package into a temporary directory
 		infoList = svnclient.info2('file://' + pkgSvnPath + '/',recurse=False,revision=pysvn.Revision(pysvn.opt_revision_kind.head))
@@ -219,7 +227,7 @@ T   info      NAME      Show channel contents
 		## Setup variables
 		channelName     = args[1]
 		packageName     = args[2]
-		channelCheckout = os.path.join(chancodir,'c_' + channelName)
+		channelCheckout = os.path.join(chancodir,channelName)
 		pkgConfigFile   = os.path.join(channelCheckout,'packages',packageName)
 		pkgUpgradeFile  = os.path.join(channelCheckout,'upgrade')
 
@@ -230,7 +238,7 @@ T   info      NAME      Show channel contents
 			fatal("Sorry, that package does not exist!")
 
 		## Make sure channel is up-to-date
-		svnclient.update(os.path.join(chancodir,'c_' + channelName))
+		svnclient.update(os.path.join(chancodir,channelName))
 
 		## is this pkg already tagged? Check the packages/ dir
 		if not os.path.isfile(pkgConfigFile):
@@ -271,7 +279,7 @@ T   info      NAME      Show channel contents
 		channelName     = args[1]
 		packageName     = args[2]
 		installOrder    = args[3]
-		channelCheckout = os.path.join(chancodir,'c_' + channelName)
+		channelCheckout = os.path.join(chancodir,channelName)
 		pkgConfigFile   = os.path.join(channelCheckout,'packages',packageName)
 
 		if not metadict['channels'].has_key(channelName):
@@ -281,7 +289,7 @@ T   info      NAME      Show channel contents
 			fatal("Sorry, that channel does not exist!")
 
 		## Make sure channel is up-to-date
-		svnclient.update(os.path.join(chancodir,'c_' + channelName))
+		svnclient.update(os.path.join(chancodir,channelName))
 
 		try:
 			## Set the svn property
