@@ -79,6 +79,7 @@ T   info      NAME      Show channel contents
 		if not options.parent == None:
 			if not metadict['channels'].has_key(options.parent):
 				fatal("The name of the parent channel is invalid")
+							
 				
 		## Workout the SVN root should be
 		svnpath = os.path.join(conf['svnroot'],name)
@@ -96,9 +97,18 @@ T   info      NAME      Show channel contents
 		except (OSError, IOError) as error:
 			print 'Failed to create base components of channel. Error was: ' + error.strerror + ' on ' + error.filename
 		else:
+			## Add the packages dir
 			svnclient.add(os.path.join(codir,'packages'))
-			revision = svnclient.checkin(codir,"Channel creation",recurse=True)
+			
+			## Check in the changes
+			svnclient.checkin(codir,"Channel creation",recurse=True)
+			
+			## Change server metadata
 			metadict['channels'][name] = {'name': name}
+			
+			## Save parent channel
+			if not options.parent == None:
+				metadict['channels'][name][parent] = options.parent
 			
 	#### CHANNEL SET #######################################################
 	elif action == 'set' and len(args) == 4:
@@ -118,23 +128,17 @@ T   info      NAME      Show channel contents
 	#### CHANNEL DELETE ####################################################
 	elif action == 'delete' and len(args) == 2:
 		name = args[1]
-		scslib.sDeleteSVN(os.path.join(conf['svnroot'],name),'channel')
-		shutil.rmtree(os.path.join(chancodir,name))
+		
+		if not metadict['channels'].has_key(channelName):
+			fatal("That channel does not exist")
+		else:
+			scslib.sDeleteSVN(os.path.join(conf['svnroot'],name),'channel')
+			shutil.rmtree(os.path.join(chancodir,name))
+			del(metadict['channels'][name])
 
 	#### CHANNEL LIST ######################################################
 	elif action == 'list':
-		output = ''
-		for channame in metadict['channels']:
-			chandict = metadict['channels'][channame]
-			if chandict.has_key('desc'):
-				output += '{0:14}  {1:64}'.format(chandict['name'],chandict['desc'])
-			else:
-				output += '{0:14}  {1:64}'.format(chandict['name'],'N/A')
-			
-		if len(output) > 0:
-			print '{0:14}  {1:64}'.format('CHANNEL NAME','DESCRIPTION')
-			print '{0:14}  {1:64}'.format('------------','-----------')
-			sys.stdout.write(output)
+		sListChannels()
 
 	#### CHANNEL TAG #######################################################
 	elif action == 'tag' and len(args) == 3:

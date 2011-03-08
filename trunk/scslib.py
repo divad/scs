@@ -96,6 +96,47 @@ def sLockAndLoad(metadataPath):
 			
 	return metadict
 	
+def sListChannel(chandict,metadict,depth):
+	output = ''
+	depthStr = ''
+	
+	if depth > 0:
+		for i in range(depth):
+			depthStr += ' '
+		depthStr += '\-'
+
+	## Channel print
+	if chandict.has_key('desc'):
+		output += '{0:14}  {1:64}'.format(chandict['name'],chandict['desc'])
+	else:
+		output += '{0:14}  {1:64}'.format(chandict['name'],'N/A')
+		
+	## Child channels
+	for channame in metadict['channels']:	
+		if metadict['channels'][channame].has_key('parent'):
+			if metadict['channels'][channame]['parent'] == channame:
+				output += sListChannel(metadict['channels'][channame],depth+1)
+		
+	return output
+	
+def sListChannels(metadict):
+	output = ''
+	depth  = 0
+	
+	## For each channel...
+	for channame in metadict['channels']:
+
+		## Only print non-child channels
+		if not metadict['channels'][channame].has_key('parent'):
+			## Output it		
+			output += sListChannel(metadict['channels'][channame],depth)
+		
+	## Print headers and the finished list		
+	if len(output) > 0:
+		print '{0:14}  {1:64}'.format('CHANNEL NAME','DESCRIPTION')
+		print '{0:14}  {1:64}'.format('------------','-----------')
+		sys.stdout.write(output)
+	
 ################################################################################
 
 def sSaveAndUnlock(metadict):
@@ -133,9 +174,9 @@ def sCreateSVN(path,name):
 
 ################################################################################
 
-def sDeleteSVN(path,svntype):
+def sDeleteSVN(path):
 	if os.path.exists(path):
 		shutil.rmtree(path)
 	else:
-		print >> sys.stderr, 'That ' + svntype + ' does not exist!'
+		print >> sys.stderr, 'That repository does not exist!'
 		sys.exit(1)
