@@ -1290,7 +1290,8 @@ T       bootstrap                  Set up SCS according to built-in defaults'''
 				info("Already subscribed to channel")
 			else:
 
-				## TODO SUB CHANNELS...
+				## TODO SUB
+				if metadict['channels'][channel][
 
 				if not os.path.isdir(localPath):
 					## set up directory layout
