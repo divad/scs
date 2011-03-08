@@ -99,7 +99,6 @@ def sLockAndLoad(metadataPath):
 	return metadict
 	
 def sListChannel(chandict,metadict,depth):
-	output = ''
 	depthStr = ''
 	
 	if depth >= 0:
@@ -109,35 +108,25 @@ def sListChannel(chandict,metadict,depth):
 
 	## Channel print
 	if chandict.has_key('desc'):
-		output += depthStr + '{0:14}  {1:64}'.format(chandict['name'],chandict['desc'])
+		print depthStr + chandict['name'] + '(' + chandict['desc'] + ')'
 	else:
-		output += depthStr + '{0:14}  {1:64}'.format(chandict['name'],'N/A')
+		print depthStr + chandict['name']
 		
 	## Child channels
 	for channame in metadict['channels']:	
 		if metadict['channels'][channame].has_key('parent'):
 			if metadict['channels'][channame]['parent'] == chandict['name']:
 				output += sListChannel(metadict['channels'][channame],metadict,depth+1)
-		
-	return output
 	
 def sListChannels(metadict):
-	output = ''
 	depth  = -1
 	
 	## For each channel...
 	for channame in metadict['channels']:
 
 		## Only print non-child channels
-		if not metadict['channels'][channame].has_key('parent'):
-			## Output it		
-			output += sListChannel(metadict['channels'][channame],metadict,depth)
-		
-	## Print headers and the finished list		
-	if len(output) > 0:
-		print '{0:14}  {1:64}'.format('CHANNEL NAME','DESCRIPTION')
-		print '{0:14}  {1:64}'.format('------------','-----------')
-		sys.stdout.write(output)
+		if not metadict['channels'][channame].has_key('parent'):	
+			sListChannel(metadict['channels'][channame],metadict,depth)
 	
 ################################################################################
 
