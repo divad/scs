@@ -20,27 +20,29 @@ import errno
 import smtplib
 from email.mime.text import MIMEText
 
-## TODO
-# e-mail fault response							1		(easy)
+## Things to finish:
+# e-mail fault response
 
-# bootstrap command?							5		(easy)
-	# create /opt/scs/ etc.
-	# create /etc/scs.conf with server as https://scs.domain/ and all other defaults
-	
-# description truncate?							2		(EASY)
+## Small changes:
+# description truncate?
 
-# new actions "pkg-info" and "chan-info" ??		3
+# new actions "pkg-info" and "chan-info" ??
 	# pkg-info will just print fields
 	# channel info will print channel members
 	
-# move def's to scslib??						4
-
-# SUB CHANNEL
+## New commands:
 # force-all command
-# check is taken from /PREVIOUS/ revision...is that a good thing?
+# bootstrap command?
+	# create /opt/scs/ etc.
+	# create /etc/scs.conf with server as https://scs.domain/ and all other defaults
 
+## Code refactoring:
 # cleanup initPkg so most stuff is done inside it rather than outside...
 # cleanup runScript like above.
+# move def's to scslib?
+
+## Questions:
+# check is taken from /PREVIOUS/ revision...is that a good thing?
 
 
 def saveMetadata():
@@ -374,16 +376,54 @@ def uninitPkg(pkg):
 ################################################################################
 ################################################################################
 
+def isChannelUpToDate(channel):
+	global metadataDict
+	global conf
+	svnclient = pysvn.Client()
+	
+	remotePath  = conf['svnroot'] + channel + '/'
+
+	## Get the latest revision of the channel
+	infoList = svnclient.info2(remotePath,recurse=False)
+	for infoTuple in infoList:
+		infoDict = infoTuple[1]
+		latestRevision = infoDict['rev']
+	debug('Latest remote channel revision is ' + str(latestRevision.number))
+
+	## Get the installed revision
+	localRevision = int(metadataDict['channels'][channel]['revision'])
+	debug('Latest local channel revision is ' + str(localRevision))
+	
+	if localRevision == latestRevision.number:
+		return 1
+	else:
+		return 0
+		
+def updateChildChannels(channel):
+	global metadataDict
+	
+	# List all channels
+	for name in metadataDict['channels']:
+	
+		# If its a child channel
+		if metadataDict['channels'][name].has_key('parent'):
+		
+			# And its parent is the channel we care about
+			if metadataDict['channels'][name]['parent'] == channel:
+
+				# Then update it
+				updateChannel(name)
+
 # results
 # 0 OK!
 # 1 Could not upgrade
 def updateChannel(channel):
-	debug('updateChannel() called')
+	debug('updateChannel(' + channel + ') called')
 	global metadataDict
 	global conf
 	svnclient = pysvn.Client()
 
-	if channelSubscribed(channel):	
+	if channelSubscribed(channel):
 		remotePath  = conf['svnroot'] + channel + '/'
 		localPath   = os.path.join(conf['scsroot'],'channels',channel)
 		localPkgs   = os.path.join(localPath,'packages')
@@ -394,16 +434,20 @@ def updateChannel(channel):
 		for infoTuple in infoList:
 			infoDict = infoTuple[1]
 			latestRevision = infoDict['rev']
-		debug('Latest remote revision is ' + str(latestRevision.number))
+		debug('Latest remote channel revision is ' + str(latestRevision.number))
 
 		## Get the installed revision
 		localRevision = int(metadataDict['channels'][channel]['revision'])
-		debug('Latest local revision is ' + str(localRevision))
+		debug('Latest local channel revision is ' + str(localRevision))
 
 		## Decide upon which revision to go to????
 		if localRevision == latestRevision.number:
+			## Mark the channel as up to date
 			info('Channel "' + channel + '" is up to date')
-			return
+
+			## Update child channels
+			updateChildChannels(channel)
+			return 0
 		else:
 			info('Updating channel "' + channel + '" to revision ' + str(localRevision +1))
 			revisionToUse = pysvn.Revision(pysvn.opt_revision_kind.number, localRevision + 1)
@@ -500,8 +544,6 @@ def updateChannel(channel):
 			else:
 				warn('Warning! Channel upgrade file does not have properties set against it!')
 
-		## TODO update sub channels
-
 		## Update package info (Although we don't actually use the info until an unsubscribe - but they are there if an admin wants them)
 		svnclient.update(localPkgs,revision=revisionToUse)
 
@@ -514,9 +556,9 @@ def updateChannel(channel):
 			## We need to recursive-call and upgrade again! :)
 			updateChannel(channel)
 			
-		else:
-			## We're done!
-			return 0
+		else:		
+			## Update child channels
+			updateChildChannels(channel)
 
 	else:
 		fatal('Not subscribed to channel ' + channel,log=False)
@@ -586,11 +628,7 @@ def initPkg(pkg,rev=-1):
 		upgrade = True
 
 		## Get local revision installed
-		## TODO get this from METADATA INSTEAD?!
-		infoList = svnclient.info2(localData,recurse=False)
-		for infoTuple in infoList:
-			infoDict = infoTuple[1]
-			localRevision = infoDict['rev'].number
+		localRevision = int(metadict['packages']['packages'][pkg]['revision'])
 
 		if localRevision == latestRevision.number:
 			info('Package ' + pkg + ' up to date (revision ' + str(localRevision) + ')')
@@ -1269,11 +1307,11 @@ T       bootstrap                  Set up SCS according to built-in defaults'''
 			localPkgs  = os.path.join(localPath,'packages')
 
 			## Get package info from server
-			metadict = fetchMetadata(conf['metaurl'])
+			remoteMeta = fetchMetadata(conf['metaurl'])
 
 			## See if the channel requested actually exists
 			found = False
-			for channelName in metadict['channels']:
+			for channelName in remoteMeta['channels']:
 				if channelName == channel:
 					found = True
 
@@ -1281,8 +1319,8 @@ T       bootstrap                  Set up SCS according to built-in defaults'''
 			if not found:
 				fatal('No such channel exists on the server')
 
-			if metadict['channels'][channel].has_key('desc'):
-				channelDescription = metadict['channels'][channel]['desc']
+			if remoteMeta['channels'][channel].has_key('desc'):
+				channelDescription = remoteMeta['channels'][channel]['desc']
 			else:
 				channelDescription = ''
 
@@ -1290,8 +1328,15 @@ T       bootstrap                  Set up SCS according to built-in defaults'''
 				info("Already subscribed to channel")
 			else:
 
-				## TODO SUB
-				if metadict['channels'][channel][
+				## If this a child channel
+				if remoteMeta['channels'][channel].has_key('parent'):
+					## Make sure we've installed the parent...
+					if not channelSubscribed(remoteMeta['channels'][channel]['parent']):
+						fatal('To subscribe to a child channel you must first subscribe to its parent')
+					else:
+						## Make sure the parent is up to date first... (the key component of a "child" channel)
+						if not isChannelUpToDate(remoteMeta['channels'][channel]['parent']):
+							fatal('The parent channel is not up to date. You must update it first')
 
 				if not os.path.isdir(localPath):
 					## set up directory layout
@@ -1363,6 +1408,10 @@ T       bootstrap                  Set up SCS according to built-in defaults'''
 
 				## Update metadata with the new channel
 				metadataDict['channels'][channel] = { 'name': channel, 'revision': localRevision, 'desc' : channelDescription}
+				
+				## Update metadata
+				if remoteMeta['channels'][channel].has_key('parent'):
+					metadataDict['channels'][channel]['parent'] = remoteMeta['channels'][channel]['parent']
 
 				## Output
 				info('Subscribed to channel ' + channel + ' - at revision ' + str(localRevision),log=True)
@@ -1377,6 +1426,8 @@ T       bootstrap                  Set up SCS according to built-in defaults'''
 			if not channelSubscribed(channel):
 				fatal("Not subscribed to that channel",log=False)
 			else:
+				## Does this channel have children? If so...GO AWAY...
+			
 				## Now do a property walk to know what packages to install
 				propList = svnclient.proplist(localPkgs,recurse=True)
 
@@ -1441,7 +1492,9 @@ T       bootstrap                  Set up SCS according to built-in defaults'''
 
 		elif action == 'update-all':
 			for channel in metadataDict['channels']:
-				updateChannel(channel)
+				## Only update top-level parent channels, updateChannel() takes care of child channels
+				if not metadataDict['channels'][channel].has_key('parent'):
+					updateChannel(channel)
 
 ################################################################################
 
