@@ -52,17 +52,17 @@ def main():
 	#### PACKAGE CREATE ####################################################
 	if action == 'create' and len(args) == 2:
 		name = args[1]
-		svnpath = os.path.join(conf['svnroot'],'p_' + name)
+		svnpath = os.path.join(conf['svnroot'],name)
 
-		## Make sure it does not exist
-		if metadict['packages'].has_key(name):
-			fatal("Sorry, that package already exists")
+		## the name must be unique across packages and channels
+		if metadict['channels'].has_key(name) or metadict['packages'].has_key(name):
+			fatal("That name is already in use")
 
 		## Create the SVN
-		scslib.sCreateSVN(svnpath,name,'package')
+		scslib.sCreateSVN(svnpath,name)
 
 		## Checkout the new SVN
-		checkout = os.path.join(pkgcodir,'p_' + name)
+		checkout = os.path.join(pkgcodir,name)
 		svnclient.checkout('file://' + svnpath, checkout)
 
 		try:
@@ -124,7 +124,7 @@ def main():
 		if not metadict['packages'].has_key(name):
 			fatal("Sorry, that package does not exist")
 		else:
-			scslib.sDeleteSVN(os.path.join(conf['svnroot'],'p_' + name),'package')
+			scslib.sDeleteSVN(os.path.join(conf['svnroot'],name),'package')
 			del(metadict['packages'][name])
 
 	#### PACKAGE LIST ######################################################
