@@ -129,7 +129,7 @@ def sListChannels(metadict):
 		## Only print non-child channels
 		if not metadict['channels'][channame].has_key('parent'):
 			## Output it		
-			output += sListChannel(metadict['channels'][channame],depth)
+			output += sListChannel(metadict['channels'][channame],metadict,depth)
 		
 	## Print headers and the finished list		
 	if len(output) > 0:
