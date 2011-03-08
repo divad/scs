@@ -124,7 +124,7 @@ def main():
 		if not metadict['packages'].has_key(name):
 			fatal("Sorry, that package does not exist")
 		else:
-			scslib.sDeleteSVN(os.path.join(conf['svnroot'],name),'package')
+			scslib.sDeleteSVN(os.path.join(conf['svnroot'],name))
 			del(metadict['packages'][name])
 
 	#### PACKAGE LIST ######################################################
