@@ -102,7 +102,7 @@ def sListChannel(chandict,metadict,depth):
 	output = ''
 	depthStr = ''
 	
-	if depth > 0:
+	if depth >= 0:
 		for i in range(depth):
 			depthStr += ' '
 		depthStr += '\-'
@@ -123,7 +123,7 @@ def sListChannel(chandict,metadict,depth):
 	
 def sListChannels(metadict):
 	output = ''
-	depth  = 0
+	depth  = -1
 	
 	## For each channel...
 	for channame in metadict['channels']:
