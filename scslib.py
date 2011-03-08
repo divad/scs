@@ -64,7 +64,9 @@ def sLoadConfig(configFile):
 
 def sLockAndLoad(metadataPath):
 	global metafileHandle
+	global metadict
 	metafileHandle = None
+	metadict = None
 
 	try:
 		metafileHandle = open(metadataPath,'r+')
@@ -107,9 +109,9 @@ def sListChannel(chandict,metadict,depth):
 
 	## Channel print
 	if chandict.has_key('desc'):
-		output += '{0:14}  {1:64}'.format(chandict['name'],chandict['desc'])
+		output += depthStr + ' ' + '{0:14}  {1:64}'.format(chandict['name'],chandict['desc'])
 	else:
-		output += '{0:14}  {1:64}'.format(chandict['name'],'N/A')
+		output += depthStr + ' ' + '{0:14}  {1:64}'.format(chandict['name'],'N/A')
 		
 	## Child channels
 	for channame in metadict['channels']:	
