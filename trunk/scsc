@@ -108,7 +108,7 @@ T   info      NAME      Show channel contents
 			
 			## Save parent channel
 			if not options.parent == None:
-				metadict['channels'][name][parent] = options.parent
+				metadict['channels'][name]['parent'] = options.parent
 			
 	#### CHANNEL SET #######################################################
 	elif action == 'set' and len(args) == 4:
