@@ -26,23 +26,20 @@ from email.mime.text import MIMEText
 ## Small changes:
 # description truncate?
 
-# new actions "pkg-info" and "chan-info" ??
-	# pkg-info will just print fields
-	# channel info will print channel members
+# new actions "pkg-info" and "chan-info" ?? TODO
+	# pkg-info will just print fields TODO
+	# channel info will print channel members TODO
 	
 ## New commands:
-# force-all command
-# bootstrap command?
-	# create /opt/scs/ etc.
-	# create /etc/scs.conf with server as https://scs.domain/ and all other defaults
+# force-all command TODO
 
 ## Code refactoring:
-# cleanup initPkg so most stuff is done inside it rather than outside...
-# cleanup runScript like above.
-# move def's to scslib?
+# cleanup initPkg so most stuff is done inside it rather than outside... TODO
+# cleanup runScript like above. TODO
+# move def's to scslib? TODO
 
 ## Questions:
-# check is taken from /PREVIOUS/ revision...is that a good thing?
+# check is taken from /PREVIOUS/ revision...is that a good thing? TODO
 
 
 def saveMetadata():
