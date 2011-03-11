@@ -22,10 +22,10 @@ from email.mime.text import MIMEText
 import socket
 
 ## Code refactoring:
-# move def's to scslib? TODO
-
+# move def's to scslib? TODO (not...that...hard? :S)
+# TODO check if the file actually is set immutable
 # change 'subscribed' to cope with child channels..?
-# in fact change everything... TODO
+# in fact change everything... TODO (easy)
 
 ## Questions:
 # check is taken from /PREVIOUS/ revision...is that a good thing? TODO
@@ -34,7 +34,7 @@ import socket
 # Add "pkg-info" command to print package info on server
 # Add "chan-info" command to print channel info on server
 # Add ability for revisions to be skipped or marked as test revisions?
-
+# Default action when local changes found should be via a pkgset thing
 
 def saveMetadata():
 	global localMetadict
@@ -170,7 +170,6 @@ def checkForLocalChanges(pkg):
 
 					debug('The file ' + dest + ' has been modified outside of SCS control',log=True)
 
-					## TODO FUTURE make the default come from a revprop? (difficult...)
 					# default is warn - i.e. it overwrites
 					checkAction = 'warn'
 
