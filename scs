@@ -21,9 +21,6 @@ import smtplib
 from email.mime.text import MIMEText
 import socket
 
-## Small changes:
-# description truncate? TODO
-
 ## Code refactoring:
 # move def's to scslib? TODO
 
