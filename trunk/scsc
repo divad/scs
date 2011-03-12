@@ -337,7 +337,7 @@ T   info      CHANNEL     Show channel contents
 		pkgList = sorted(pkgList, key=lambda pkg: pkg[0])	
 		
 		for pkgT in pkgList:
-			print pkgT['name']
+			print pkgT[0]
 
 	else:
 		parser.print_help()
