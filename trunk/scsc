@@ -76,12 +76,12 @@ T   info      CHANNEL     Show channel contents
 		name = args[1]
 
 		## the name must be unique across packages and channels
-		if metadict['channels'].has_key(name) or metadict['packages'].has_key(name):
+		if meta.data['channels'].has_key(name) or meta.data['packages'].has_key(name):
 			inform.fatal("That name is already in use")
 			
 		## Create child channel if chosen
 		if not options.parent == None:
-			if not metadict['channels'].has_key(options.parent):
+			if not meta.data['channels'].has_key(options.parent):
 				inform.fatal("The name of the parent channel is invalid")
 				
 		## Workout the SVN root should be
@@ -107,15 +107,15 @@ T   info      CHANNEL     Show channel contents
 			svnclient.checkin(codir,"Channel creation",recurse=True)
 			
 			## Change server metadata
-			metadict['channels'][name] = {'name': name}
+			meta.data['channels'][name] = {'name': name}
 			
 			## Save parent channel
 			if not options.parent == None:
-				metadict['channels'][name]['parent'] = options.parent
+				meta.data['channels'][name]['parent'] = options.parent
 				
 			## Save description
 			if not options.desc == None:
-				metadict['channels'][name]['desc'] = options.desc				
+				meta.data['channels'][name]['desc'] = options.desc				
 			
 	#### CHANNEL SET #######################################################
 	elif action == 'set' and len(args) == 4:
@@ -123,12 +123,12 @@ T   info      CHANNEL     Show channel contents
 		prop         = args[2]
 		value        = args[3]
 		
-		if not metadict['channels'].has_key(channelName):
+		if not meta.data['channels'].has_key(channelName):
 			inform.fatal("Sorry, that channel does not exist!")
 		
 		## DESC
 		if prop == 'desc':
-				metadict['channels'][channelName][prop] = value
+				meta.data['channels'][channelName][prop] = value
 		else:
 			inform.fatal("No such property")
 
@@ -136,16 +136,16 @@ T   info      CHANNEL     Show channel contents
 	elif action == 'delete' and len(args) == 2:
 		name = args[1]
 		
-		if not metadict['channels'].has_key(name):
+		if not meta.data['channels'].has_key(name):
 			inform.fatal("That channel does not exist")
 		else:
 			scslib.sDeleteSVN(os.path.join(conf['svnroot'],name))
 			shutil.rmtree(os.path.join(chancodir,name))
-			del(metadict['channels'][name])
+			del(meta.data['channels'][name])
 
 	#### CHANNEL LIST ######################################################
 	elif action == 'list':
-		scslib.listChannels(metadict)
+		scslib.listChannels(meta.data)
 
 	#### CHANNEL TAG #######################################################
 	elif action == 'tag' and len(args) == 3:
@@ -159,10 +159,10 @@ T   info      CHANNEL     Show channel contents
 		pkgConfigFile   = os.path.join(channelCheckout,'packages',packageName)
 		pkgUpgradeFile  = os.path.join(channelCheckout,'upgrade')
 
-		if not metadict['channels'].has_key(channelName):
+		if not meta.data['channels'].has_key(channelName):
 			inform.fatal("Sorry, that channel does not exist!")
 			
-		if not metadict['packages'].has_key(packageName):
+		if not meta.data['packages'].has_key(packageName):
 			inform.fatal("Sorry, that package does not exist!")
 
 		## Make sure channel is up-to-date
@@ -240,10 +240,10 @@ T   info      CHANNEL     Show channel contents
 		pkgConfigFile   = os.path.join(channelCheckout,'packages',packageName)
 		pkgUpgradeFile  = os.path.join(channelCheckout,'upgrade')
 
-		if not metadict['channels'].has_key(channelName):
+		if not meta.data['channels'].has_key(channelName):
 			inform.fatal("Sorry, that channel does not exist!")
 
-		if not metadict['packages'].has_key(packageName):
+		if not meta.data['packages'].has_key(packageName):
 			inform.fatal("Sorry, that package does not exist!")
 
 		## Make sure channel is up-to-date
@@ -291,10 +291,10 @@ T   info      CHANNEL     Show channel contents
 		channelCheckout = os.path.join(chancodir,channelName)
 		pkgConfigFile   = os.path.join(channelCheckout,'packages',packageName)
 
-		if not metadict['channels'].has_key(channelName):
+		if not meta.data['channels'].has_key(channelName):
 			inform.fatal("Sorry, that channel does not exist!")
 
-		if not metadict['packages'].has_key(packageName):
+		if not meta.data['packages'].has_key(packageName):
 			inform.fatal("Sorry, that channel does not exist!")
 
 		## Make sure channel is up-to-date
@@ -314,6 +314,9 @@ T   info      CHANNEL     Show channel contents
 		channelName     = args[1]
 		channelCheckout = os.path.join(chancodir,channelName)		
 		channelPkgs     = os.path.join(channelCheckout,'packages')
+		
+		if not meta.data['channels'].has_key(channelName):
+			inform.fatal("Sorry, that channel does not exist!")		
 	
 		## Now do a property walk to list packages
 		propList = svnclient.proplist(channelPkgs,recurse=True)
