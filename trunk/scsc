@@ -11,9 +11,6 @@ import shutil
 import pysvn
 import atexit
 
-## TODO
-# info
-
 def main():
 	#### HELP TEXT FOR ACTIONS
 	usage = '''Usage: %prog [options] ACTION [...]
@@ -21,7 +18,7 @@ def main():
     list                  Lists all channels
     create    CHANNEL     Create a channel
     delete    CHANNEL     Deletes a channel
-T   info      CHANNEL     Show channel contents
+    info      CHANNEL     Show channel contents
     set       CHANNEL PROPERTY VALUE     
                           Set a channel property to VALUE
                         
