@@ -57,7 +57,7 @@ def main():
 		svnpath = os.path.join(conf['svnroot'],name)
 
 		## the name must be unique across packages and channels
-		if metadict['channels'].has_key(name) or metadict['packages'].has_key(name):
+		if meta.data['channels'].has_key(name) or meta.data['packages'].has_key(name):
 			inform.fatal("That name is already in use")
 
 		## Create the SVN
@@ -88,17 +88,17 @@ def main():
 			svnclient.add(os.path.join(checkout,'data'),recurse=True)
 			revision = svnclient.checkin(checkout,"Package creation",recurse=True)
 
-			## Record in metadict for lating saving into metafile
-			metadict['packages'][name] = {'name': name}
+			## Record in meta.data for lating saving into metafile
+			meta.data['packages'][name] = {'name': name}
 			
 			## Other options
 			if options.stepfree:
-				metadict['packages'][name]['type'] = 'idempotent'
+				meta.data['packages'][name]['type'] = 'idempotent'
 			else:
-				metadict['packages'][name]['type'] = 'transactional'
+				meta.data['packages'][name]['type'] = 'transactional'
 				
 			if not options.desc == None:
-				metadict['packages'][name]['desc'] = options.desc
+				meta.data['packages'][name]['desc'] = options.desc
 
 		## Cleanup in all cases
 		shutil.rmtree(checkout)
@@ -109,12 +109,12 @@ def main():
 		prop     = args[2]
 		value    = args[3]
 		
-		if not metadict['packages'].has_key(pkgName):
+		if not meta.data['packages'].has_key(pkgName):
 			inform.fatal("That package does not exist")
 		
 		## DESC
 		if prop == 'desc':
-				metadict['packages'][pkgName][prop] = value
+				meta.data['packages'][pkgName][prop] = value
 		else:
 			inform.fatal("No such property")
 
@@ -123,17 +123,17 @@ def main():
 		name = args[1]
 
 		## Make sure it exists
-		if not metadict['packages'].has_key(name):
+		if not meta.data['packages'].has_key(name):
 			inform.fatal("Sorry, that package does not exist")
 		else:
 			scslib.sDeleteSVN(os.path.join(conf['svnroot'],name))
-			del(metadict['packages'][name])
+			del(meta.data['packages'][name])
 
 	#### PACKAGE LIST ######################################################
 	elif action == 'list':
 		output = ''
-		for pkgname in metadict['packages']:
-			pkgdict = metadict['packages'][pkgname]
+		for pkgname in meta.data['packages']:
+			pkgdict = meta.data['packages'][pkgname]
 			
 			if pkgdict.has_key('desc'):
 				output += '{0:14}  {1:64}'.format(pkgdict['name'],pkgdict['desc'])
