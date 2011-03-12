@@ -1,6 +1,7 @@
 #!/usr/bin/python
 # Subversion Configuration System Manager
 # Library File
+# This "scslib" is a Module
 
 import ConfigParser
 import sys
@@ -11,19 +12,137 @@ import fcntl
 import re
 import subprocess
 import errno
+import logging
 
 ## functions starting with lowercase 's' are for the server component only
 ## functions starting with lowercase 'c' are for the client component only
 ## all other functions are intended for both
 
+################################################################################	
+################################################################################	
 ################################################################################
 
-def sFatal(msg,code=1):
-	sys.stderr.write(msg + "\n")
-	sys.exit(1)
-	
-################################################################################	
+## informant
+## used for logging to file and stdout/stderr
+class informant:
+	logOpened = False
+	logger = logging.getLogger('scs')
+	quietFlag = False
+	debugFlag = False
 
+	def setDebug(self):
+		self.debugFlag = True
+		
+	def setQuiet(self):
+		self.quietFlag = True
+
+	def openLog(self,logfile):
+		self.logger.setLevel(logging.DEBUG)
+	
+		handler = logging.handlers.RotatingFileHandler(logfile, maxBytes=512000, backupCount=5)
+		formatter = logging.Formatter("%(asctime)s %(name)s %(levelname)s: %(message)s")
+		handler.setFormatter(formatter)
+
+		self.logger.addHandler(handler)
+		self.logOpened = True
+
+	def debug(self,o,log=False):
+		if not self.quietFlag:
+			if self.debugFlag:
+				print str(o)
+			
+		if log and self.logOpened:
+			self.logger.debug(str(o))
+
+	def warn(self,o,log=True):
+		if not self.quietFlag:
+			print str(o)
+		
+		if log and self.logOpened:
+			self.logger.warning(str(o))
+
+	def error(self,o,log=True):
+		sys.stderr.write(str(o) + "\n")
+	
+		if log and self.logOpened:
+			self.logger.error(str(o))
+	
+	def info(self,o,log=False):
+		if not self.quietFlag:
+			print str(o)
+		
+		if log and self.logOpened:
+			self.logger.info(str(o))
+
+	def fatal(self,o,exitcode=1,log=True):
+		## First save any metadata changes
+		# TODO how to do this??! (pass a class localmeta.save() 
+		#saveMetadata()
+	
+		## Log the fault
+		if log and self.logOpened:
+			self.logger.critical(str(o))
+	
+		## Panic and quit
+		sys.stderr.write('FATAL: ' + str(o) + "\n")
+		sys.exit(exitcode)
+		
+################################################################################	
+################################################################################	
+################################################################################
+
+## metaman
+## used for loading and saving metadata, either on the client program or server
+class metaman:
+	data = {}
+	filePath = ''
+	fd = None
+	
+	def load(self,path):
+		self.filePath = path
+
+		## open and lock file
+		try:
+			self.fd = open(self.filePath,'r+')
+			fcntl.lockf(self.fd,fcntl.LOCK_EX | fcntl.LOCK_NB)
+		except (IOError, OSError) as exception:
+			if exception.errno == errno.EAGAIN or exception.errno == errno.EACCES:
+				inform.fatal('Sorry, another process is currently executing - try again later')
+			else:
+				inform.fatal('Unable to lock metadata: ' + str(exception.filename) + ': ' + str(exception.strerror))
+
+		## read data
+		try:
+			jsonData = self.fd.read()
+			self.fd.seek(0)
+		except (IOError, OSError) as e:
+			inform.fatal('Unable to read from ' + e.filename + ': ' + e.strerror)
+
+		## Convert to python objects from json
+		if len(jsonData) == 0:
+			self.data = {'channels': {}, 'packages': {}}
+		else:
+			## Turn json data into python objects
+			try:
+				self.data = json.loads(jsonData)
+			except (TypeError,ValueError) as e:
+				inform.fatal('Unable to understand metadata: ' + str(e))
+
+	def save(self):
+		## Turn python objects into json
+		jsonOut = json.dumps(self.data, sort_keys=True, indent=4)
+
+		## Write to file
+		try:
+			self.fd.seek(0)
+			self.fd.truncate(0)
+			self.fd.write(jsonOut)
+			self.fd.close
+		except (IOError, OSError) as error:
+			## We can't call fatal here since this function() might be called FROM it!
+			## The best we can do is write to the stderr... TODO??
+			sys.stderr.write('Failed to write metadata: ' + error.strerror + ' on ' + error.filename)
+	
 def sLoadConfig(configFile):
 
 	## Defaults
@@ -42,63 +161,25 @@ def sLoadConfig(configFile):
 		if os.path.isdir(configValue):
 			conf['svnroot'] = configValue
 		else:
-			fatal('The subversion root specified in ' + configFile + ' is not a directory')
+			inform.fatal('The subversion root specified in ' + configFile + ' is not a directory')
 
 	if config.has_option('server','metadata file'):
 		configValue = config.get('server','metadata file')
 		if os.path.isfile(configValue):
 			conf['metadataPath'] = configValue
 		else:
-			fatal('The metadata file specified in ' + configFile + ' is not a file')
+			inform.fatal('The metadata file specified in ' + configFile + ' is not a file')
 
 	if config.has_option('server','scsm root'):
 		configValue = config.get('server','scsm root')
 		if os.path.isdir(configValue):
 			conf['scsmroot'] = configValue
 		else:
-			fatal('The scsm root specified in ' + configFile + ' is not a directory')
+			inform.fatal('The scsm root specified in ' + configFile + ' is not a directory')
 
-	return conf
-
-################################################################################
-
-def sLockAndLoad(metadataPath):
-	global metafileHandle
-	global metadict
-	metafileHandle = None
-	metadict = None
-
-	try:
-		metafileHandle = open(metadataPath,'r+')
-		fcntl.lockf(metafileHandle,fcntl.LOCK_EX | fcntl.LOCK_NB)
-	except (IOError, OSError) as exception:
-		if exception.errno == errno.EAGAIN or exception.errno == errno.EACCES:
-			fatal('Sorry, another process is currently executing - try again later')
-		else:
-			fatal('Unable to lock metadata: ' + str(exception.filename) + ': ' + str(exception.strerror))
-
-	try:
-		jsonData = metafileHandle.read()
-		metafileHandle.seek(0)
-	except (IOError, OSError) as e:
-		fatal('Unable to read from ' + e.filename + ': ' + e.strerror)
-
-	## Handle empty data
-	if len(jsonData) == 0:
-		metadict = {'channels': {}, 'packages': {}}
-	else:
-		## Turn json data into python objects
-		try:
-			metadict = json.loads(jsonData)
-		except (TypeError,ValueError) as e:
-			fatal('Unable to understand metadata: ' + str(e))
+	return conf	
 	
-	## NOTE! We never bother to LOCK_UN via fcntl because fcntl does this anyway
-	## when you close the file handle which will happen either at exit, or .close()
-			
-	return metadict
-	
-def sListChannel(chandict,metadict,depth):
+def listChannel(chandict,metadict,depth):
 	depthStr = ''
 	
 	if depth >= 0:
@@ -116,9 +197,9 @@ def sListChannel(chandict,metadict,depth):
 	for channame in metadict['channels']:	
 		if metadict['channels'][channame].has_key('parent'):
 			if metadict['channels'][channame]['parent'] == chandict['name']:
-				sListChannel(metadict['channels'][channame],metadict,depth+1)
+				listChannel(metadict['channels'][channame],metadict,depth+1)
 	
-def sListChannels(metadict):
+def listChannels(metadict):
 	depth  = -1
 	
 	## For each channel...
@@ -126,42 +207,25 @@ def sListChannels(metadict):
 
 		## Only print non-child channels
 		if not metadict['channels'][channame].has_key('parent'):	
-			sListChannel(metadict['channels'][channame],metadict,depth)
-	
-################################################################################
-
-def sSaveAndUnlock(metadict):
-	global metafileHandle
-	
-	## Turn "metadict" into json
-	jsonOut = json.dumps(metadict, sort_keys=True, indent=4)
-
-	## Write to file
-	try:
-		metafileHandle.seek(0)
-		metafileHandle.truncate(0)
-		metafileHandle.write(jsonOut)
-		metafileHandle.close
-	except (IOError, OSError) as error:
-		fatal('Failed to write metadata: ' + error.strerror + ' on ' + error.filename)
-
+			listChannel(metadict['channels'][channame],metadict,depth)
+		
 def sCreateSVN(path,name):
 	## Validate the name
 	regex = re.compile('^[a-zA-Z\_\-0-9]+$')
 	matched = regex.match(name)
 	if not matched:
-		fatal('Invalid name! Name must only contain a-z, 0-9 or the characters _ and -')
+		inform.fatal('Invalid name! Name must only contain a-z, 0-9 or the characters _ and -')
 
 	## Check dir doesnt already exist
 	if os.path.exists(path):
-		fatal('A subversion repository with that name already exists')
+		inform.fatal('A subversion repository with that name already exists')
 
 	svnadmin = subprocess.Popen(['svnadmin', 'create', path],stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 	(stdoutdata, stderrdata) = svnadmin.communicate()
 
 	## Handle errors
 	if svnadmin.returncode > 0:
-		fatal(stdoutdata)
+		inform.fatal(stdoutdata)
 
 ################################################################################
 
@@ -171,3 +235,24 @@ def sDeleteSVN(path):
 	else:
 		print >> sys.stderr, 'That repository does not exist!'
 		sys.exit(1)
+		
+################################################################################		
+
+def isFileImmutable(filePath):
+	script = subprocess.Popen(['/usr/bin/lsattr','-d',filePath],stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+	(stdoutdata, stderrdata) = script.communicate()
+		
+	if script.returncode == 0:
+		if (stdoutdata[4] == 'i'):
+			return True
+		else:
+			return False
+	else:
+		inform.error(stdoutdata)
+		inform.error("Unable to determine if filePath is immutable")
+		return False
+		
+################################################################################		
+		
+inform = informant()
+meta = metaman()

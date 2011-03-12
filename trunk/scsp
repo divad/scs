@@ -3,12 +3,13 @@
 
 #### IMPORTS
 import scslib
-from scslib import sFatal
+from scslib import inform, meta
 from optparse import OptionParser, OptionGroup
 import os
 import sys
 import shutil
 import pysvn
+import atexit
 
 def main():
 	usage = '''Usage: %prog [options] ACTION [...]
@@ -44,7 +45,9 @@ def main():
 		return
 		
 	## Get metadata
-	metadict = scslib.sLockAndLoad(conf['metadataPath'])
+	meta.load(conf['metadataPath'])
+	## Call save on exit
+	atexit.register(meta.save)
 			
 	## Shortcut to action
 	action = args[0]
@@ -56,7 +59,7 @@ def main():
 
 		## the name must be unique across packages and channels
 		if metadict['channels'].has_key(name) or metadict['packages'].has_key(name):
-			sFatal("That name is already in use")
+			inform.fatal("That name is already in use")
 
 		## Create the SVN
 		scslib.sCreateSVN(svnpath,name)
@@ -108,13 +111,13 @@ def main():
 		value    = args[3]
 		
 		if not metadict['packages'].has_key(pkgName):
-			sFatal("That package does not exist")
+			inform.fatal("That package does not exist")
 		
 		## DESC
 		if prop == 'desc':
 				metadict['packages'][pkgName][prop] = value
 		else:
-			sFatal("No such property")
+			inform.fatal("No such property")
 
 	#### PACKAGE DELETE ####################################################
 	elif action == 'delete' and len(args) == 2:
@@ -122,7 +125,7 @@ def main():
 
 		## Make sure it exists
 		if not metadict['packages'].has_key(name):
-			sFatal("Sorry, that package does not exist")
+			inform.fatal("Sorry, that package does not exist")
 		else:
 			scslib.sDeleteSVN(os.path.join(conf['svnroot'],name))
 			del(metadict['packages'][name])
@@ -147,10 +150,10 @@ def main():
 		parser.print_help()
 
 	## Save metadata
-	scslib.sSaveAndUnlock(metadict)
+	meta.save()
 
 if __name__ == "__main__":
 	if sys.version < '2.6':
-		sFatal('Wrong Python Version !!!')
+		inform.fatal('Wrong Python Version !!!')
 	else:
 	    main()
