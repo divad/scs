@@ -3,7 +3,7 @@
 
 #### IMPORTS
 import scslib
-from scslib import fatal
+from scslib import sFatal
 from optparse import OptionParser, OptionGroup
 import os
 import sys
@@ -56,7 +56,7 @@ def main():
 
 		## the name must be unique across packages and channels
 		if metadict['channels'].has_key(name) or metadict['packages'].has_key(name):
-			fatal("That name is already in use")
+			sFatal("That name is already in use")
 
 		## Create the SVN
 		scslib.sCreateSVN(svnpath,name)
@@ -108,13 +108,13 @@ def main():
 		value    = args[3]
 		
 		if not metadict['packages'].has_key(pkgName):
-			fatal("That package does not exist")
+			sFatal("That package does not exist")
 		
 		## DESC
 		if prop == 'desc':
 				metadict['packages'][pkgName][prop] = value
 		else:
-			fatal("No such property")
+			sFatal("No such property")
 
 	#### PACKAGE DELETE ####################################################
 	elif action == 'delete' and len(args) == 2:
@@ -122,7 +122,7 @@ def main():
 
 		## Make sure it exists
 		if not metadict['packages'].has_key(name):
-			fatal("Sorry, that package does not exist")
+			sFatal("Sorry, that package does not exist")
 		else:
 			scslib.sDeleteSVN(os.path.join(conf['svnroot'],name))
 			del(metadict['packages'][name])
@@ -151,6 +151,6 @@ def main():
 
 if __name__ == "__main__":
 	if sys.version < '2.6':
-		fatal('Wrong Python Version !!!')
+		sFatal('Wrong Python Version !!!')
 	else:
 	    main()

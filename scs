@@ -20,16 +20,15 @@ import errno
 import smtplib
 from email.mime.text import MIMEText
 import socket
+import scslib
 
 ## Code refactoring:
 # move def's to scslib? TODO (not...that...hard? :S)
-# change 'subscribed' to cope with child channels..?
-# in fact change everything... TODO (easy)
 
 ## Questions:
 # check is taken from /PREVIOUS/ revision...is that a good thing? TODO
 
-#### ROADMAP
+#### ROADMAP (Future versions)
 # Add "pkg-info" command to print package info on server
 # Add "chan-info" command to print channel info on server
 # Add ability for revisions to be skipped or marked as test revisions?
@@ -1237,54 +1236,12 @@ def main():
 
 		elif action == 'channels':
 			metadict = fetchMetadata(conf['metaurl'])
-			output = ''
-			for cName in metadict['channels']:
-				data = metadict['channels'][cName]
-				if type(data).__name__=='dict':
-				
-					## Get the latest channel revision
-					remotePath  = conf['svnroot'] + cName + '/'
-
-					## Get the latest revision of the package
-					infoList = svnclient.info2(remotePath,recurse=False)
-					for infoTuple in infoList:
-						infoDict = infoTuple[1]
-						latestRevision = infoDict['rev']
-				
-					if data.has_key('name') and data.has_key('desc'):
-						output += "{0:14}  {1:15}  {2:37}\n".format(str(data['name']), str(latestRevision.number), str(data['desc']))
-					elif data.has_key('name'):
-						output += "{0:14}  {1:15}  {2:37}\n".format(str(data['name']), str(latestRevision.number), 'N/A')
-					else:
-						fatal('Unable to understand data: ' + str(e))
-				else:
-					fatal('Unable to understand data: ' + str(e))
-
-			if len(output) > 0:
-				print '{0:14}  {1:15}  {2:37}'.format('CHANNEL NAME','LATEST REVISION','DESCRIPTION')
-				print '{0:14}  {1:15}  {2:37}'.format('------------','---------------','-----------')
-				sys.stdout.write(output)					
-
+			scslib.sListChannels(metadict)
+			
 ################################################################################
 
 		elif action == 'subscribed':
-			output = ''
-			for channel in localMetadict['channels']:
-				data = localMetadict['channels'][channel]
-				if type(data).__name__=='dict':
-					if data.has_key('name') and data.has_key('revision') and data.has_key('desc'):
-						output += "{0:24}    {1:24}    {2:24}\n".format(str(data['name']), str(data['revision']), str(data['desc']))
-					elif data.has_key('name') and data.has_key('revision'):
-						output += "{0:24}    {1:24}\n".format(str(data['name']), str(data['revision']))
-					else:
-						fatal('Unable to understand data: ' + str(e))
-				else:
-					fatal('Unable to understand data: ' + str(e))
-
-			if len(output) > 0:
-				print '{0:24}    {1:24}    {2:24}'.format('CHANNEL NAME','LOCAL REVISION','DESCRIPTION')
-				print '{0:24}    {1:24}    {2:24}'.format('------------','--------------','-----------')
-				sys.stdout.write(output)
+			scslib.sListChannels(localMetadict)
 
 ################################################################################
 

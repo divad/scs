@@ -18,7 +18,7 @@ import errno
 
 ################################################################################
 
-def fatal(msg,code=1):
+def sFatal(msg,code=1):
 	sys.stderr.write(msg + "\n")
 	sys.exit(1)
 	
@@ -104,7 +104,7 @@ def sListChannel(chandict,metadict,depth):
 	if depth >= 0:
 		for i in range(depth):
 			depthStr += ' '
-		depthStr += '\-'
+		depthStr += u' \u02EA '
 
 	## Channel print
 	if chandict.has_key('desc'):
