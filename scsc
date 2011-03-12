@@ -3,12 +3,13 @@
 
 #### IMPORTS
 import scslib
-from scslib import sFatal
+from scslib import inform, meta
 from optparse import OptionParser, OptionGroup
 import os
 import sys
 import shutil
 import pysvn
+import atexit
 
 ## TODO
 # info
@@ -56,7 +57,9 @@ T   info      CHANNEL     Show channel contents
 		return
 
 	## Get metadata
-	metadict = scslib.sLockAndLoad(conf['metadataPath'])
+	meta.load(conf['metadataPath'])
+	## Call save on exit
+	atexit.register(meta.save)
 
 	## Load subversion library
 	svnclient = pysvn.Client()
@@ -74,12 +77,12 @@ T   info      CHANNEL     Show channel contents
 
 		## the name must be unique across packages and channels
 		if metadict['channels'].has_key(name) or metadict['packages'].has_key(name):
-			sFatal("That name is already in use")
+			inform.fatal("That name is already in use")
 			
 		## Create child channel if chosen
 		if not options.parent == None:
 			if not metadict['channels'].has_key(options.parent):
-				sFatal("The name of the parent channel is invalid")
+				inform.fatal("The name of the parent channel is invalid")
 							
 				
 		## Workout the SVN root should be
@@ -122,20 +125,20 @@ T   info      CHANNEL     Show channel contents
 		value        = args[3]
 		
 		if not metadict['channels'].has_key(channelName):
-			sFatal("Sorry, that channel does not exist!")
+			inform.fatal("Sorry, that channel does not exist!")
 		
 		## DESC
 		if prop == 'desc':
 				metadict['channels'][channelName][prop] = value
 		else:
-			sFatal("No such property")
+			inform.fatal("No such property")
 
 	#### CHANNEL DELETE ####################################################
 	elif action == 'delete' and len(args) == 2:
 		name = args[1]
 		
 		if not metadict['channels'].has_key(name):
-			sFatal("That channel does not exist")
+			inform.fatal("That channel does not exist")
 		else:
 			scslib.sDeleteSVN(os.path.join(conf['svnroot'],name))
 			shutil.rmtree(os.path.join(chancodir,name))
@@ -143,7 +146,7 @@ T   info      CHANNEL     Show channel contents
 
 	#### CHANNEL LIST ######################################################
 	elif action == 'list':
-		scslib.sListChannels(metadict)
+		scslib.listChannels(metadict)
 
 	#### CHANNEL TAG #######################################################
 	elif action == 'tag' and len(args) == 3:
@@ -158,10 +161,10 @@ T   info      CHANNEL     Show channel contents
 		pkgUpgradeFile  = os.path.join(channelCheckout,'upgrade')
 
 		if not metadict['channels'].has_key(channelName):
-			sFatal("Sorry, that channel does not exist!")
+			inform.fatal("Sorry, that channel does not exist!")
 			
 		if not metadict['packages'].has_key(packageName):
-			sFatal("Sorry, that package does not exist!")
+			inform.fatal("Sorry, that package does not exist!")
 
 		## Make sure channel is up-to-date
 		svnclient.update(os.path.join(chancodir,channelName))
@@ -173,7 +176,7 @@ T   info      CHANNEL     Show channel contents
 		## Was there a specific revision to use?
 		if options.revision >= 0:
 			if options.revision >= currentPackageRevision:
-				sFatal('Invalid package revision')
+				inform.fatal('Invalid package revision')
 			else:
 				taggedRevision = options.revision
 		else:
@@ -185,9 +188,9 @@ T   info      CHANNEL     Show channel contents
 			currentRev = currentRev[pkgConfigFile]
 
 			if int(currentRev) == int(taggedRevision):
-				sFatal('The package is already tagged to that revision',code=0)
+				inform.fatal('The package is already tagged to that revision',code=0)
 			elif int(currentRev) > int(taggedRevision):
-				sFatal('The package is already tagged to a more recent revision',code=0)
+				inform.fatal('The package is already tagged to a more recent revision',code=0)
 
 		## Touch the package name in packages/ in the channel
 		try:
@@ -239,17 +242,17 @@ T   info      CHANNEL     Show channel contents
 		pkgUpgradeFile  = os.path.join(channelCheckout,'upgrade')
 
 		if not metadict['channels'].has_key(channelName):
-			sFatal("Sorry, that channel does not exist!")
+			inform.fatal("Sorry, that channel does not exist!")
 
 		if not metadict['packages'].has_key(packageName):
-			sFatal("Sorry, that package does not exist!")
+			inform.fatal("Sorry, that package does not exist!")
 
 		## Make sure channel is up-to-date
 		svnclient.update(os.path.join(chancodir,channelName))
 
 		## is this pkg already tagged? Check the packages/ dir
 		if not os.path.isfile(pkgConfigFile):
-			sFatal('The package is not tagged to the channel')
+			inform.fatal('The package is not tagged to the channel')
 
 		try:
 			### Remove all previous properties on the upgrade file if it exists
@@ -290,10 +293,10 @@ T   info      CHANNEL     Show channel contents
 		pkgConfigFile   = os.path.join(channelCheckout,'packages',packageName)
 
 		if not metadict['channels'].has_key(channelName):
-			sFatal("Sorry, that channel does not exist!")
+			inform.fatal("Sorry, that channel does not exist!")
 
 		if not metadict['packages'].has_key(packageName):
-			sFatal("Sorry, that channel does not exist!")
+			inform.fatal("Sorry, that channel does not exist!")
 
 		## Make sure channel is up-to-date
 		svnclient.update(os.path.join(chancodir,channelName))
@@ -312,10 +315,10 @@ T   info      CHANNEL     Show channel contents
 		parser.print_help()
 
 	## Save metadata
-	scslib.sSaveAndUnlock(metadict)
+	meta.save()
 
 if __name__ == "__main__":
 	if sys.version < '2.6':
-		sFatal('Wrong Python Version !!!')
+		inform.fatal('Wrong Python Version !!!')
 	else:
 	    main()

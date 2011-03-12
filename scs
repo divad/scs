@@ -21,6 +21,8 @@ import smtplib
 from email.mime.text import MIMEText
 import socket
 import scslib
+from scslib import inform, meta
+import atexit
 
 ## Code refactoring:
 # move def's to scslib? TODO (not...that...hard? :S)
@@ -33,119 +35,6 @@ import scslib
 # Add "chan-info" command to print channel info on server
 # Add ability for revisions to be skipped or marked as test revisions?
 # Default action when local changes found should be via a pkgset thing
-
-################################################################################
-################################################################################
-
-def isFileImmutable(filePath):
-	
-	script = subprocess.Popen(['/usr/bin/lsattr','-d',filePath],stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-	(stdoutdata, stderrdata) = script.communicate()
-		
-	if script.returncode == 0:
-		if (stdoutdata[4] == 'i'):
-			return True
-		else:
-			return False
-	else:
-		error(stdoutdata)
-		error("Unable to determine if filePath is immutable")
-		return False
-
-################################################################################
-################################################################################
-
-
-def saveMetadata():
-	global localMetadict
-	global metadataFile
-	
-	if not localMetadict == None:
-		#### save metadata changes to disk
-		## Turn "metadict" into json
-		jsonOut = json.dumps(localMetadict, sort_keys=True, indent=4)
-
-		## Write to file
-		try:
-			metadataFile.seek(0)
-			metadataFile.truncate(0)
-			metadataFile.write(jsonOut)
-			metadataFile.close
-		except (IOError, OSError) as e:
-			sys.stderr.write('Failed to write client metadata: ' + e.strerror + ' on ' + e.filename)
-			sys.exit(255)
-
-################################################################################
-################################################################################
-
-def openLog(logfile):
-	global logOpened
-	global logger
-
-	logger = logging.getLogger('scs')
-	logger.setLevel(logging.DEBUG)
-	handler = logging.handlers.RotatingFileHandler(logfile, maxBytes=512000, backupCount=5)
-	formatter = logging.Formatter("%(asctime)s %(name)s %(levelname)s: %(message)s")
-	handler.setFormatter(formatter)
-	logger.addHandler(handler)
-	logOpened = True
-
-def debug(o,log=False):
-	global options
-	global logOpened
-	global logger
-	
-	if not options.quiet:
-		if options.debug:
-			print str(o)
-			
-	if log and logOpened:
-		logger.debug(str(o))
-
-def warn(o,log=True):
-	global options
-	global logOpened
-	global logger	
-	
-	if not options.quiet:
-		print str(o)
-		
-	if log and logOpened:
-		logger.warning(str(o))
-
-def error(o,log=True):
-	global logOpened
-	global logger
-	sys.stderr.write(str(o) + "\n")
-	
-	if log and logOpened:
-		logger.error(str(o))
-	
-def info(o,log=False):
-	global options
-	global logOpened
-	global logger
-	
-	if not options.quiet:
-		print str(o)
-		
-	if log and logOpened:
-		logger.info(str(o))
-
-def fatal(o,exitcode=1,log=True):
-	global logOpened
-	global logger
-	
-	## First save any metadata changes
-	saveMetadata()
-	
-	## Log the fault
-	if log and logOpened:
-		logger.critical(str(o))	
-	
-	## Panic and quit
-	sys.stderr.write('FATAL: ' + str(o) + "\n")
-	sys.exit(exitcode)
 
 ################################################################################
 ################################################################################
@@ -176,19 +65,19 @@ def checkForLocalChanges(pkg):
 
 		if 'dest' in properties:
 			dest = properties['dest']
-			debug('Checking for local changes on file: ' + dest,log=True)
+			inform.debug('Checking for local changes on file: ' + dest,log=True)
 
 			## Get SHA sums
 			try:
 				sourceh = shasum(source)
 				desth   = shasum(dest)
 			except Exception as e:
-				warn('Cannot check for local changes on ' + dest + ': ' + str(e))
+				inform.warn('Cannot check for local changes on ' + dest + ': ' + str(e))
 			else:
 				## Compare sums
 				if not sourceh == desth:
 
-					debug('The file ' + dest + ' has been modified outside of SCS control',log=True)
+					inform.debug('The file ' + dest + ' has been modified outside of SCS control',log=True)
 
 					# default is warn - i.e. it overwrites
 					checkAction = 'warn'
@@ -196,14 +85,14 @@ def checkForLocalChanges(pkg):
 					if 'check' in properties:
 						checkAction = properties['check']
 
-					debug('The file has been configured to "' + checkAction + '" in this scenario',log=True)
+					inform.debug('The file has been configured to "' + checkAction + '" in this scenario',log=True)
 
 					if checkAction == 'fail':
 						retcode = 3
-						error("Local changes found in package " + pkg + ", file " + dest)						
+						inform.error("Local changes found in package " + pkg + ", file " + dest)						
 					elif checkAction == 'warn':
 						retcode = 2					
-						warn("WARNING! Local changes found to file " + dest)
+						inform.warn("WARNING! Local changes found to file " + dest)
 					elif checkAction == 'skip':
 						retcode = 1					
 						## add the file to the "ignore" list
@@ -215,9 +104,7 @@ def checkForLocalChanges(pkg):
 ################################################################################
 
 def packageInstalled(pkg):
-	global localMetadict
-
-	if localMetadict['packages'].has_key(pkg):
+	if meta.data['packages'].has_key(pkg):
 		return True
 	else:
 		return False
@@ -226,9 +113,7 @@ def packageInstalled(pkg):
 ################################################################################
 
 def channelSubscribed(channel):
-	global localMetadict
-
-	if localMetadict['channels'].has_key(channel):
+	if meta.data['channels'].has_key(channel):
 		return True
 	else:
 		return False
@@ -260,7 +145,7 @@ def printPackageHeader():
 ################################################################################
 
 def printPackageInfo(pkg):
-	data = localMetadict['packages'][pkg]
+	data = meta.data['packages'][pkg]
 	if type(data).__name__=='dict':
 		if isPackageSuspended(data['name']):
 			flags = 'SUSPENDED'
@@ -272,33 +157,27 @@ def printPackageInfo(pkg):
 		elif data.has_key('name') and data.has_key('revision'):
 			print "{0:14}  {1:14}  {2:9}  {3:37}".format(str(data['name']), str(data['revision']), flags,'N/A')
 		else:
-			fatal('Unable to understand data: ' + str(e))
+			inform.fatal('Unable to understand data: ' + str(e))
 	else:
-		fatal('Unable to understand data: ' + str(e))
+		inform.fatal('Unable to understand data: ' + str(e))
 
 ################################################################################
 ################################################################################
 
 def suspendPackage(pkg,reason):
-	global localMetadict
-
 	if packageInstalled(pkg):
-		localMetadict['packages'][pkg]['status'] = 'suspended'
-		localMetadict['packages'][pkg]['suspend_reason'] = reason
+		meta.data['packages'][pkg]['status'] = 'suspended'
+		meta.data['packages'][pkg]['suspend_reason'] = reason
 
 def resumePackage(pkg):
-	global localMetadict
-
 	if isPackageSuspended(pkg):
-		del(localMetadict['packages'][pkg]['status'])
-		del(localMetadict['packages'][pkg]['suspend_reason'])
+		del(meta.data['packages'][pkg]['status'])
+		del(meta.data['packages'][pkg]['suspend_reason'])
 
 def isPackageSuspended(pkg):
-	global localMetadict
-
 	if packageInstalled(pkg):
-		if localMetadict['packages'][pkg].has_key('status'):
-			if localMetadict['packages'][pkg]['status'] == 'suspended':
+		if meta.data['packages'][pkg].has_key('status'):
+			if meta.data['packages'][pkg]['status'] == 'suspended':
 				return True
 
 	return False
@@ -322,14 +201,14 @@ def shasum(filePath,blocksize=2**20):
 ## Runs a package script, returns false 
 def runScript(pkgName,scriptName):
 	global conf
-	debug('Executing ' + scriptName,log=True)
+	inform.debug('Executing ' + scriptName,log=True)
 	scriptPath = os.path.join(conf['scsroot'],'packages',pkgName,'scripts',scriptName)
 
 	## CHMOD First
 	os.chmod(scriptPath,stat.S_IRWXU)
 
 	if os.path.getsize(scriptPath) == 0:
-		debug("Script is empty; not executing",log=True)
+		inform.debug("Script is empty; not executing",log=True)
 		return False
 
 	## Now run the script
@@ -339,16 +218,16 @@ def runScript(pkgName,scriptName):
 		
 		## If the command returned a non-zero exit we should log its full output to error()
 		if not script.returncode == 0:
-			error(stdoutdata)
+			inform.error(stdoutdata)
 		
 		## Log the error
-		error(scriptName + ' script returned non-zero')
+		inform.error(scriptName + ' script returned non-zero')
 		
 		## Return true to say we found an error
 		return True
 		
 	except OSError as e:
-		error('Execution of script ' + scriptName + ' failed: ' + str(e))
+		inform.error('Execution of script ' + scriptName + ' failed: ' + str(e))
 		## Return true to say we found an error
 		return True
 		
@@ -359,18 +238,18 @@ def runScript(pkgName,scriptName):
 ################################################################################
 
 def fetchMetadata(metadataUrl):
-	debug('Fetching metadata from server')
+	inform.debug('Fetching metadata from server')
 	try:
 		f = urllib.urlopen(metadataUrl)
 		jsonData = f.read()
 		f.close()
 	except IOError as e:
-		fatal('Unable to download ' + metadataUrl + ': ' + str(e.strerror))
+		inform.fatal('Unable to download ' + metadataUrl + ': ' + str(e.strerror))
 
 	try:
 		metadict = json.loads(jsonData)
 	except (TypeError,ValueError) as e:
-		fatal('Unable to understand server metadata: ' + str(e))
+		inform.fatal('Unable to understand server metadata: ' + str(e))
 
 	return metadict
 
@@ -392,37 +271,36 @@ def uninitPkg(pkg):
 			shutil.rmtree(os.path.join(conf['scsroot'],'packages',pkg))
 
 			## Update metadata
-			del(localMetadict['packages'][pkg])
+			del(meta.data['packages'][pkg])
 
 			## Output
-			info('Removed package "' + pkg + '"')
+			inform.info('Removed package "' + pkg + '"')
 	
 			## Return OK
 			return 0
 	else:
-		info('Package "' + pkg + '" not installed so not removing',log=True)
+		inform.info('Package "' + pkg + '" not installed so not removing',log=True)
 		return 0
 
 ################################################################################
 ################################################################################
 
 def isChannelUpToDate(channel):
-	global localMetadict
 	global conf
 	svnclient = pysvn.Client()
 	
-	remotePath  = conf['svnroot'] + channel + '/'
+	remotePath  = conf['svnroot'] + '/' + channel + '/'
 
 	## Get the latest revision of the channel
 	infoList = svnclient.info2(remotePath,recurse=False)
 	for infoTuple in infoList:
 		infoDict = infoTuple[1]
 		latestRevision = infoDict['rev']
-	debug('Latest remote channel revision is ' + str(latestRevision.number))
+	inform.debug('Latest remote channel revision is ' + str(latestRevision.number))
 
 	## Get the installed revision
-	localRevision = int(localMetadict['channels'][channel]['revision'])
-	debug('Latest local channel revision is ' + str(localRevision))
+	localRevision = int(meta.data['channels'][channel]['revision'])
+	inform.debug('Latest local channel revision is ' + str(localRevision))
 	
 	if localRevision == latestRevision.number:
 		return 1
@@ -433,16 +311,14 @@ def isChannelUpToDate(channel):
 ################################################################################		
 		
 def updateChildChannels(channel):
-	global localMetadict
-	
 	# List all channels
-	for name in localMetadict['channels']:
+	for name in meta.data['channels']:
 	
 		# If its a child channel
-		if localMetadict['channels'][name].has_key('parent'):
+		if meta.data['channels'][name].has_key('parent'):
 		
 			# And its parent is the channel we care about
-			if localMetadict['channels'][name]['parent'] == channel:
+			if meta.data['channels'][name]['parent'] == channel:
 
 				# Then update it
 				updateChannel(name)
@@ -454,8 +330,7 @@ def updateChildChannels(channel):
 # 0 OK!
 # 1 Could not upgrade
 def updateChannel(channel):
-	debug('updateChannel(' + channel + ') called')
-	global localMetadict
+	inform.debug('updateChannel(' + channel + ') called')
 	global conf
 	svnclient = pysvn.Client()
 
@@ -470,22 +345,22 @@ def updateChannel(channel):
 		for infoTuple in infoList:
 			infoDict = infoTuple[1]
 			latestRevision = infoDict['rev']
-		debug('Latest remote channel revision is ' + str(latestRevision.number))
+		inform.debug('Latest remote channel revision is ' + str(latestRevision.number))
 
 		## Get the installed revision
-		localRevision = int(localMetadict['channels'][channel]['revision'])
-		debug('Latest local channel revision is ' + str(localRevision))
+		localRevision = int(meta.data['channels'][channel]['revision'])
+		inform.debug('Latest local channel revision is ' + str(localRevision))
 
 		## Decide upon which revision to go to????
 		if localRevision == latestRevision.number:
 			## Mark the channel as up to date
-			info('Channel "' + channel + '" is up to date')
+			inform.info('Channel "' + channel + '" is up to date')
 
 			## Update child channels
 			updateChildChannels(channel)
 			return 0
 		else:
-			info('Updating channel "' + channel + '" to revision ' + str(localRevision +1))
+			inform.info('Updating channel "' + channel + '" to revision ' + str(localRevision +1))
 			revisionToUse = pysvn.Revision(pysvn.opt_revision_kind.number, localRevision + 1)
 
 		## No need to download the upgrade file, we'll just read its properties from remote :)
@@ -501,7 +376,7 @@ def updateChannel(channel):
 					(retCode,faultMsg) = initPkg(properties['name'],int(properties['revision']))
 					
 					if retCode > 0:
-						error("Could not init/upgrade " + properties['name'] + ". Channel could not be updated")
+						inform.error("Could not init/upgrade " + properties['name'] + ". Channel could not be updated")
 
 						## Alert email
 						if not conf['mailaddr'] == None:
@@ -529,17 +404,17 @@ def updateChannel(channel):
 					result = uninitPkg(properties['name'])
 
 					if result == 1:
-						fatal("Could not upgrade channel. Please correct the error and try to upgrade again")
+						inform.fatal("Could not upgrade channel. Please correct the error and try to upgrade again")
 						return 1
 					
 			else:
-				warn('Warning! Channel upgrade file does not have properties set against it!')
+				inform.warn('Warning! Channel upgrade file does not have properties set against it!')
 
 		## Update package info (Although we don't actually use the info until an unsubscribe - but they are there if an admin wants them)
 		svnclient.update(localPkgs,revision=revisionToUse)
 
 		## Save new revision
-		localMetadict['channels'][channel]['revision'] = revisionToUse.number;
+		meta.data['channels'][channel]['revision'] = revisionToUse.number;
 
 		## We're upgraded
 		if revisionToUse.number < latestRevision:
@@ -552,7 +427,7 @@ def updateChannel(channel):
 			updateChildChannels(channel)
 
 	else:
-		fatal('Not subscribed to channel ' + channel,log=False)
+		inform.fatal('Not subscribed to channel ' + channel,log=False)
 		
 ################################################################################
 ################################################################################		
@@ -573,7 +448,7 @@ def installPackageData(localDataPath,ignoreList=[]):
 
 		## Skip files we've been instructed to due to local changes
 		if source in ignoreList:
-			debug('Skipping file ' + source + ' from inst stage due to local changes')
+			inform.debug('Skipping file ' + source + ' from inst stage due to local changes')
 			continue;
 
 		## By default, apply properties to the source file in /opt/scs/packages/<pkg/data/
@@ -598,20 +473,20 @@ def installPackageData(localDataPath,ignoreList=[]):
 					retcode = chattr.returncode
 
 					if retcode > 0:
-						debug('Unable to remove immutable flag from ' + dest)
+						inform.debug('Unable to remove immutable flag from ' + dest)
 
 			if action == 'copy':
 				try:
 					shutil.copyfile(source,dest)
 				except IOError as e:
-					error("Unable to copy from " + source + " to " + dest + ": " + str(e))
+					inform.error("Unable to copy from " + source + " to " + dest + ": " + str(e))
 					faultOccured = True
 
 			elif action == 'link':
 				try:
 					os.symlink(source,dest)
 				except (IOError, OSError) as e:
-					error("Unable to link " + source + " to " + dest + ": " + str(e))
+					inform.error("Unable to link " + source + " to " + dest + ": " + str(e))
 					faultOccured = True
 
 			elif action == 'linkr':
@@ -622,7 +497,7 @@ def installPackageData(localDataPath,ignoreList=[]):
 						os.unlink(dest)
 					os.symlink(source,dest)
 				except (IOError, OSError) as e:
-					error("Unable to linkr " + source + " to " + dest + ": " + str(e))
+					inform.error("Unable to linkr " + source + " to " + dest + ": " + str(e))
 					faultOccured = True
 
 			elif action == 'linko':
@@ -631,7 +506,7 @@ def installPackageData(localDataPath,ignoreList=[]):
 						os.unlink(dest)
 					os.symlink(source,dest)
 				except (IOError, OSError) as e:
-					error("Unable to linko " + source + " to " + dest + ": " + str(e))
+					inform.error("Unable to linko " + source + " to " + dest + ": " + str(e))
 					faultOccured = True
 
 		## chmod - set the permissions to octal mode
@@ -639,7 +514,7 @@ def installPackageData(localDataPath,ignoreList=[]):
 			try:
 				os.chmod(dest,int(properties['chmod'],8))
 			except Exception as e:
-				error('Could not apply chmod property to ' + dest + ': ' + str(e))	
+				inform.error('Could not apply chmod property to ' + dest + ': ' + str(e))	
 				faultOccured = True
 
 		## owner - set the owner to
@@ -649,7 +524,7 @@ def installPackageData(localDataPath,ignoreList=[]):
 				uid = pwd[2]
 				os.chown(dest,uid)
 			except Exception as e:
-				error('Could not apply owner property to ' + dest + ': ' + str(e))
+				inform.error('Could not apply owner property to ' + dest + ': ' + str(e))
 				faultOccured = True
 
 		## group - set the group to
@@ -659,14 +534,14 @@ def installPackageData(localDataPath,ignoreList=[]):
 				gid = grp[2]
 				os.chown(dest,-1,gid)
 			except Exception as e:
-				error('Could not apply group property to ' + dest + ': ' + str(e))
+				inform.error('Could not apply group property to ' + dest + ': ' + str(e))
 				faultOccured = True
 
 		if 'uid' in properties:
 			try:
 				os.chown(dest,properties['uid'],-1)
 			except Exception as e:
-				error('Could not apply uid property to ' + dest + ': ' + str(e))
+				inform.error('Could not apply uid property to ' + dest + ': ' + str(e))
 				faultOccured = True
 
 		## group - set the group to
@@ -674,7 +549,7 @@ def installPackageData(localDataPath,ignoreList=[]):
 			try:
 				os.chown(dest,-1,properties['gid'])
 			except Exception as e:
-				error('Could not apply gid property to ' + dest + ': ' + str(e))
+				inform.error('Could not apply gid property to ' + dest + ': ' + str(e))
 				faultOccured = True
 
 		## immutable - set the file to immutable after
@@ -688,11 +563,11 @@ def installPackageData(localDataPath,ignoreList=[]):
 				retcode = chattr.returncode
 
 				if retcode > 0:
-					error(stdoutdata)
+					inform.error(stdoutdata)
 					faultOccured = True
 					
 			else:
-				warn('Not applying immutable attribute to symlink - not possible')
+				inform.warn('Not applying immutable attribute to symlink - not possible')
 				
 				
 	return faultOccured
@@ -721,7 +596,7 @@ def initPkg(pkg,rev=-1):
 
 	## Catch errors
 	if not found:
-		error('Could not find package to install in server metadata')
+		inform.error('Could not find package to install in server metadata')
 		return (1,'Could not find package to install in server metadata')
 
 	if metadict['packages'][pkg].has_key('desc'):
@@ -759,46 +634,46 @@ def initPkg(pkg,rev=-1):
 		upgrade = True
 
 		## Get local revision installed
-		localRevision = int(localMetadict['packages'][pkg]['revision'])
+		localRevision = int(meta.data['packages'][pkg]['revision'])
 
 		if localRevision == latestRevision.number:
-			info('Package ' + pkg + ' up to date (revision ' + str(localRevision) + ')')
+			inform.info('Package ' + pkg + ' up to date (revision ' + str(localRevision) + ')')
 			return (0,None)
 		else:
 			revisionToUse = pysvn.Revision(pysvn.opt_revision_kind.number, int(localRevision) + 1)
 
-		info('Updating package "' + pkg + '" to revision ' + str(revisionToUse.number),log=True)
+		inform.info('Updating package "' + pkg + '" to revision ' + str(revisionToUse.number),log=True)
 			
 		## Is the package suspended?
 		if isPackageSuspended(pkg):
-			error("Package '" + pkg + "' is currently suspended: " + localMetadict['packages'][pkg]['suspend_reason'])
-			return (1,"Package '" + pkg + "' is currently suspended: " + localMetadict['packages'][pkg]['suspend_reason'])
+			inform.error("Package '" + pkg + "' is currently suspended: " + meta.data['packages'][pkg]['suspend_reason'])
+			return (1,"Package '" + pkg + "' is currently suspended: " + meta.data['packages'][pkg]['suspend_reason'])
 
 		## Should we ignore local changes?
 		ignore = options.ignore
 
 		## If we shouldn't then check for local changes
 		if not ignore:
-			info('Checking for local changes',log=True)
+			inform.info('Checking for local changes',log=True)
 			(localChangesResult,ignoreList) = checkForLocalChanges(pkg)
 			
 		## If local changes were detected and we must not proceed because of them...
 		if localChangesResult == 3:
-			error('One or more files have been changed locally, this must be corrected before upgrading')
+			inform.error('One or more files have been changed locally, this must be corrected before upgrading')
 			return (1,'One or more files have been changed locally, this must be corrected before upgrading')
 
 		## Pre-increment ("pre-upgrade") script
 		if runScript(pkg,'preinc'):
-			error('Could not init package')
+			inform.error('Could not init package')
 			return (1,'The preinc script returned an error')
 
 		## Update data now
-		debug('Updating package data')
+		inform.debug('Updating package data')
 		svnclient.update(localData,revision=revisionToUse)
 		
 	else:
 		revisionToUse = latestRevision
-		info('Installing ' + pkg,log=True)
+		inform.info('Installing ' + pkg,log=True)
 
 		## Create paths only if they haven't been already
 		## This can happen if a pre* script failed
@@ -814,28 +689,28 @@ def initPkg(pkg,rev=-1):
 				sys.exit(0)
 
 			## Initial check out of data
-			debug('Deploying package data')
+			inform.debug('Deploying package data')
 			svnclient.checkout(remotePath + 'data',localData,revision=revisionToUse)
 
 		else:
-			debug('Updating package data')
+			inform.debug('Updating package data')
 			svnclient.update(localData,revision=revisionToUse)
 
-	debug('Deploying scripts')
+	inform.debug('Deploying scripts')
 	svnclient.export(remotePath + 'scripts',localScripts,revision=revisionToUse,force=True,recurse=True)
 
 	## Run scripts
 	if upgrade:
 		if runScript(pkg,'preup'):
-			error('Cancelling package init 1')
+			inform.error('Cancelling package init 1')
 			return (1,'The preup script returned an error')			
 	else:
 		if runScript(pkg,'preinit'):
-			error('Cancelling package init 2')
+			inform.error('Cancelling package init 2')
 			return (1,'The preinit script returned an error')
 
 	if runScript(pkg,'preinst'):
-		error('Cancelling package init 3')
+		inform.error('Cancelling package init 3')
 		return (1,'The preinst script returned an error')
 
 	## If anything fails now then we can't/shouldn't stop, but we should mark
@@ -863,21 +738,21 @@ def initPkg(pkg,rev=-1):
 			faultOccured = True
 
 	## Output some info
-	info('Package ' + pkg + ' now at revision ' + str(revisionToUse.number),log=True)
+	inform.info('Package ' + pkg + ' now at revision ' + str(revisionToUse.number),log=True)
 
 	## update metadata
-	localMetadict['packages'][pkg] = { 'name': pkg, 'revision': revisionToUse.number, 'desc': packageDescription}
+	meta.data['packages'][pkg] = { 'name': pkg, 'revision': revisionToUse.number, 'desc': packageDescription}
 
 	if faultOccured:
 		suspendPackage(pkg,faultMsg)
-		error('An error occured during the init process. The package "' + pkg + '" is now suspended')
+		inform.error('An error occured during the init process. The package "' + pkg + '" is now suspended')
 		return 2
 	else:
 		## Recursive call package if we're not at the latest now
 		if revisionToUse.number < latestRevision.number:
 			return initPkg(pkg)	
 		else:
-			info('Package ' + pkg + ' is now up to date',log=True)
+			inform.info('Package ' + pkg + ' is now up to date',log=True)
 			return 0
 
 ################################################################################
@@ -926,10 +801,6 @@ def main():
         init          PACKAGE      Install/upgrade package (Not recommended)
         uninit        PACKAGE      Remove package (Not recommended)'''
 
-	## Prepare the metadata dictionary (local)
-	global localMetadict
-	localMetadict = None
-	
 	## Log variable
 	global logOpened
 	logOpened = False
@@ -950,6 +821,12 @@ def main():
 	global options
 	global args
 	(options, args) = parser.parse_args()
+	
+	#### Set debug/quiet
+	if options.debug:
+		inform.setDebug()
+	if options.quiet:
+		inform.setQuiet()
 
 	#### LOAD CONFIG
 	config = ConfigParser.RawConfigParser()
@@ -966,9 +843,9 @@ def main():
 	
 	## log file
 	if config.has_option('client','log file'):
-		openLog(config.get('client','log file'))
+		inform.openLog(config.get('client','log file'))
 	else:
-		openLog('/var/log/scs.log')
+		inform.openLog('/var/log/scs.log')
 	
 	## scs root
 	if config.has_option('client','scs root'):
@@ -976,18 +853,18 @@ def main():
 		if os.path.isdir(configValue):
 			conf['scsroot'] = configValue
 		else:
-			fatal('The scs root specified in ' + options.config + ' is not a directory')
+			inform.fatal('The scs root specified in ' + options.config + ' is not a directory')
 
 	## svn root
 	if config.has_option('client','svn root'):
 		conf['svnroot'] = config.get('client','svn root')
 	else:
-		fatal('No svn root defined in ' + options.config)
+		inform.fatal('No svn root defined in ' + options.config)
 
 	if config.has_option('client','metadata url'):
 		conf['metaurl'] = config.get('client','metadata url')
 	else:
-		fatal('No metadata url defined in ' + options.config)
+		inform.fatal('No metadata url defined in ' + options.config)
 		
 	## email options
 	if config.has_option('client','smtp server'):
@@ -997,40 +874,12 @@ def main():
 		configValue = config.get('client','notify email')
 		conf['mailaddr'] = configValue		
 
-	#### LOCK AND LOAD METADATA
-	## Open metadata file, lock it, and read contents
-	global metadataFile
-	metadataPath = os.path.join(conf['scsroot'],'client.meta')
-	try:
-		## Create client.meta if it does not exist
-		if not os.path.isfile(metadataPath):
-			open(metadataPath,'w')
-			
-		metadataFile = open(metadataPath,'r+')
-		fcntl.lockf(metadataFile,fcntl.LOCK_EX | fcntl.LOCK_NB)
-		
-	except (IOError, OSError) as exception:
-		if exception.errno == errno.EAGAIN or exception.errno == errno.EACCES:
-			fatal('Sorry, another process is currently executing - try again later')
-		else:
-			fatal('Unable to lock ' + str(exception.filename) + ': ' + str(exception.strerror))
-
-	try:
-		jsonData = metadataFile.read()
-		metadataFile.seek(0)
-	except (IOError, OSError) as e:
-		fatal('Unable to read from ' + e.filename + ': ' + e.strerror)
-
-	## Handle empty data
-	if len(jsonData) == 0:
-		localMetadict = {'channels': {}, 'packages': {}}
-	else:
-		## Turn json data into python objects
-		try:
-			localMetadict = json.loads(jsonData)
-		except (TypeError,ValueError) as e:
-			fatal('Unable to understand metadata: ' + str(e))
-
+	## Load metadata
+	meta.load(os.path.join(conf['scsroot'],'client.meta'))
+	
+	## Register a close handler so it is saved at exit
+	atexit.register(meta.save)
+	
 	#### SWTICH ACTIONS
 	if len(args) < 1:
 		parser.print_help()
@@ -1042,7 +891,7 @@ def main():
 		if action == 'installed':
 			output = ''
 			looped = False
-			for pkg in localMetadict['packages']:
+			for pkg in meta.data['packages']:
 
 				if not looped:
 					printPackageHeader()
@@ -1060,7 +909,7 @@ def main():
 				if type(data).__name__=='dict':
 				
 					## Get the latest channel revision
-					remotePath  = conf['svnroot'] + pkgName + '/'
+					remotePath  = conf['svnroot'] + '/' + pkgName + '/'
 
 					## Get the latest revision of the package
 					infoList = svnclient.info2(remotePath,recurse=False)
@@ -1073,9 +922,9 @@ def main():
 					elif data.has_key('name'):
 						output += "{0:14}  {1:8}  {2:44}\n".format(str(data['name']), str(latestRevision.number), 'N/A')
 					else:
-						fatal('Unable to understand data: ' + str(e))
+						inform.fatal('Unable to understand data: ' + str(e))
 				else:
-					fatal('Unable to understand data: ' + str(e))
+					inform.fatal('Unable to understand data: ' + str(e))
 
 			if len(output) > 0:
 				print '{0:14}  {1:8}  {2:44}'.format('PACKAGE NAME','REVISION','DESCRIPTION')
@@ -1089,7 +938,7 @@ def main():
 			pkg = args[1]
 
 			if packageInstalled(pkg):
-				data = localMetadict['packages'][pkg]
+				data = meta.data['packages'][pkg]
 
 				print '           Name: ' + data['name']
 				print ' Local Revision: ' + str(data['revision'])
@@ -1104,7 +953,7 @@ def main():
 				else:
 					print '         Status: OK'
 			else:
-				fatal('Package not installed',log=False)
+				inform.fatal('Package not installed',log=False)
 				
 ################################################################################				
 
@@ -1114,11 +963,11 @@ def main():
 
 			if packageInstalled(pkg):
 				if isPackageSuspended(pkg):
-					fatal('Package is already suspended',log=False)
+					inform.fatal('Package is already suspended',log=False)
 				else:
 					suspendPackage(pkg,'Suspended by system administrator')
 			else:
-				fatal('Package not installed',log=False)
+				inform.fatal('Package not installed',log=False)
 				
 ################################################################################				
 
@@ -1129,9 +978,9 @@ def main():
 				if isPackageSuspended(pkg):
 					resumePackage(pkg)
 				else:
-					fatal('Package is not suspended',log=False)
+					inform.fatal('Package is not suspended',log=False)
 			else:
-				fatal('Package not installed',log=False)
+				inform.fatal('Package not installed',log=False)
 				
 ################################################################################				
 
@@ -1141,13 +990,13 @@ def main():
 			if packageInstalled(pkg):
 				checkForLocalChanges(pkg)
 			else:
-				fatal('Package not installed',log=False)
+				inform.fatal('Package not installed',log=False)
 				
 ################################################################################
 
 		elif action == 'verify-all':
-			for pkg in localMetadict['packages']:
-				debug('Checking for local changes to pkg "' + pkg + '"',log=True)
+			for pkg in meta.data['packages']:
+				inform.debug('Checking for local changes to pkg "' + pkg + '"',log=True)
 				checkForLocalChanges(pkg)
 				
 ################################################################################				
@@ -1159,13 +1008,13 @@ def main():
 				dataPath = os.path.join(conf['scsroot'],'packages',pkg,'data')
 				installPackageData(dataPath)
 			else:
-				fatal('Package not installed',log=False)
+				inform.fatal('Package not installed',log=False)
 				
 ################################################################################
 
 		elif action == 'force-all':
-			for pkg in localMetadict['packages']:
-				debug('Forcing package data processing on "' + pkg + '"',log=True)
+			for pkg in meta.data['packages']:
+				inform.debug('Forcing package data processing on "' + pkg + '"',log=True)
 				dataPath = os.path.join(conf['scsroot'],'packages',pkg,'data')			
 				installPackageData(dataPath)		
 
@@ -1178,20 +1027,20 @@ def main():
 				dataPath = os.path.join(conf['scsroot'],'packages',pkg,'data')
 				listFiles(pkg)
 			else:
-				fatal('No such package')
+				inform.fatal('No such package')
 
 ################################################################################
 
 		elif action == 'files-all':
-			for pkg in localMetadict['packages']:
-				info(pkg + ':')
+			for pkg in meta.data['packages']:
+				inform.info(pkg + ':')
 				listFiles(pkg)
 
 ################################################################################
 
 		elif action == 'owner' and len(args) == 2:
 			fileName = args[1]
-			for pkg in localMetadict['packages']:
+			for pkg in meta.data['packages']:
 				propList = svnclient.proplist(os.path.join(conf['scsroot'],'packages',pkg,'data'),recurse=True)
 
 				for propSet in propList:
@@ -1221,7 +1070,7 @@ def main():
 
 			## Catch errors
 			if not found:
-				fatal('No such package on server')
+				inform.fatal('No such package on server')
 
 			initPkg(pkg)
 
@@ -1236,18 +1085,18 @@ def main():
 
 		elif action == 'channels':
 			metadict = fetchMetadata(conf['metaurl'])
-			scslib.sListChannels(metadict)
+			scslib.listChannels(metadict)
 			
 ################################################################################
 
 		elif action == 'subscribed':
-			scslib.sListChannels(localMetadict)
+			scslib.listChannels(meta.data)
 
 ################################################################################
 
 		elif action == 'subscribe' and len(args) == 2:
 			channel    = args[1]
-			remotePath = conf['svnroot'] + channel + '/'
+			remotePath = conf['svnroot'] + '/' + channel + '/'
 			localPath  = os.path.join(conf['scsroot'],'channels',channel)
 			localPkgs  = os.path.join(localPath,'packages')
 
@@ -1262,7 +1111,7 @@ def main():
 
 			## Catch errors
 			if not found:
-				fatal('No such channel exists on the server')
+				inform.fatal('No such channel exists on the server')
 
 			if remoteMeta['channels'][channel].has_key('desc'):
 				channelDescription = remoteMeta['channels'][channel]['desc']
@@ -1270,18 +1119,18 @@ def main():
 				channelDescription = ''
 
 			if channelSubscribed(channel):
-				info("Already subscribed to channel")
+				inform.info("Already subscribed to channel")
 			else:
 
 				## If this a child channel
 				if remoteMeta['channels'][channel].has_key('parent'):
 					## Make sure we've installed the parent...
 					if not channelSubscribed(remoteMeta['channels'][channel]['parent']):
-						fatal('To subscribe to a child channel you must first subscribe to its parent')
+						inform.fatal('To subscribe to a child channel you must first subscribe to its parent')
 					else:
 						## Make sure the parent is up to date first... (the key component of a "child" channel)
 						if not isChannelUpToDate(remoteMeta['channels'][channel]['parent']):
-							fatal('The parent channel is not up to date. You must update it first')
+							inform.fatal('The parent channel is not up to date. You must update it first')
 
 				if not os.path.isdir(localPath):
 					## set up directory layout
@@ -1326,7 +1175,7 @@ def main():
 
 					## Result of pkgInit
 					if retcode > 0:
-						fatal("Could not init/upgrade " + properties['name'] + ". Could not subscribe to channel.")
+						inform.fatal("Could not init/upgrade " + properties['name'] + ". Could not subscribe to channel.")
 
 				## What revision did we just subscribe to?
 				infoList = svnclient.info2(localPkgs,recurse=False)
@@ -1335,14 +1184,14 @@ def main():
 					localRevision = infoDict['rev'].number
 
 				## Update metadata with the new channel
-				localMetadict['channels'][channel] = { 'name': channel, 'revision': localRevision, 'desc' : channelDescription}
+				meta.data['channels'][channel] = { 'name': channel, 'revision': localRevision, 'desc' : channelDescription}
 				
 				## Update metadata
 				if remoteMeta['channels'][channel].has_key('parent'):
-					localMetadict['channels'][channel]['parent'] = remoteMeta['channels'][channel]['parent']
+					meta.data['channels'][channel]['parent'] = remoteMeta['channels'][channel]['parent']
 
 				## Output
-				info('Subscribed to channel ' + channel + ' - at revision ' + str(localRevision),log=True)
+				inform.info('Subscribed to channel ' + channel + ' - at revision ' + str(localRevision),log=True)
 
 ################################################################################
 
@@ -1352,7 +1201,7 @@ def main():
 			localPkgs  = os.path.join(localPath,'packages')
 
 			if not channelSubscribed(channel):
-				fatal("Not subscribed to that channel",log=False)
+				inform.fatal("Not subscribed to that channel",log=False)
 			else:
 				## Does this channel have children? If so...GO AWAY...
 			
@@ -1379,24 +1228,24 @@ def main():
 
 					if result == 1:
 						## Failed to remove, could not unsubscribe!
-						fatal("Could not unsubscribe from channel. Please correct the error and try to unsubscribe again")
+						inform.fatal("Could not unsubscribe from channel. Please correct the error and try to unsubscribe again")
 						
 				## Delete data
 				shutil.rmtree(localPath)
 
 				## Update metadata
-				del(localMetadict['channels'][channel])
+				del(meta.data['channels'][channel])
 
 				## Output
-				info('Unsubscribed from channel ' + channel,log=True)
+				inform.info('Unsubscribed from channel ' + channel,log=True)
 
 ################################################################################
 
 		elif action == 'check':
 			output = ''
 
-			for channel in localMetadict['channels']:
-				remotePath   = conf['svnroot'] + channel + '/'
+			for channel in meta.data['channels']:
+				remotePath   = conf['svnroot'] + '/' + channel + '/'
 
 				## Get latest remote revision
 				infoList = svnclient.info2(remotePath,recurse=False)
@@ -1404,8 +1253,8 @@ def main():
 					infoDict = infoTuple[1]
 					latestRevision = infoDict['rev']
 
-				if latestRevision.number > int(localMetadict['channels'][channel]['revision']):
-					output += '{0:24}    {1:24}    {2:24}'.format(channel,str(latestRevision.number), str(localMetadict['channels'][channel]['revision']))
+				if latestRevision.number > int(meta.data['channels'][channel]['revision']):
+					output += '{0:24}    {1:24}    {2:24}'.format(channel,str(latestRevision.number), str(meta.data['channels'][channel]['revision']))
 
 			if len(output) > 0:
 				print '{0:24}    {1:24}    {2:24}'.format('CHANNEL NAME','LATEST REVISION','LOCAL REVISION')
@@ -1419,17 +1268,15 @@ def main():
 			updateChannel(channel)
 
 		elif action == 'update-all':
-			for channel in localMetadict['channels']:
+			for channel in meta.data['channels']:
 				## Only update top-level parent channels, updateChannel() takes care of child channels
-				if not localMetadict['channels'][channel].has_key('parent'):
+				if not meta.data['channels'][channel].has_key('parent'):
 					updateChannel(channel)
 
 ################################################################################
 
 		else:
 			parser.print_help()
-
-		saveMetadata()
 
 ################################################################################
 
