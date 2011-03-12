@@ -23,7 +23,6 @@ import socket
 
 ## Code refactoring:
 # move def's to scslib? TODO (not...that...hard? :S)
-# TODO check if the file actually is set immutable
 # change 'subscribed' to cope with child channels..?
 # in fact change everything... TODO (easy)
 
@@ -35,6 +34,28 @@ import socket
 # Add "chan-info" command to print channel info on server
 # Add ability for revisions to be skipped or marked as test revisions?
 # Default action when local changes found should be via a pkgset thing
+
+################################################################################
+################################################################################
+
+def isFileImmutable(filePath):
+	
+	script = subprocess.Popen(['/usr/bin/lsattr','-d',filePath],stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+	(stdoutdata, stderrdata) = script.communicate()
+		
+	if script.returncode == 0:
+		if (stdoutdata[4] == 'i'):
+			return True
+		else:
+			return False
+	else:
+		error(stdoutdata)
+		error("Unable to determine if filePath is immutable")
+		return False
+
+################################################################################
+################################################################################
+
 
 def saveMetadata():
 	global localMetadict
@@ -570,14 +591,15 @@ def installPackageData(localDataPath,ignoreList=[]):
 			if 'action' in properties:
 				action = properties['action']
 
-			## Try to remove immutable flag... TODO wtf? we need to detect if it is set somehow (lsattr -d, check if X char is 'i')
+			## Deal with immutability
 			if not os.path.islink(dest):
-				chattr = subprocess.Popen(['chattr', '-i', dest],stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-				(stdoutdata, stderrdata) = chattr.communicate()
-				retcode = chattr.returncode
+				if isFileImmutable(dest):
+					chattr = subprocess.Popen(['chattr', '-i', dest],stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+					(stdoutdata, stderrdata) = chattr.communicate()
+					retcode = chattr.returncode
 
-				if retcode > 0:
-					debug('Unable to remove immutable flag from ' + dest)
+					if retcode > 0:
+						debug('Unable to remove immutable flag from ' + dest)
 
 			if action == 'copy':
 				try:
