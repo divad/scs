@@ -310,6 +310,32 @@ T   info      CHANNEL     Show channel contents
 		except pysvn.ClientError as error:
 			print 'Subversion operation failed: ' + str(error)
 
+	elif action == 'info' and len(args) == 2:
+		channelName     = args[1]
+		channelCheckout = os.path.join(chancodir,channelName)		
+		channelPkgs     = os.path.join(channelCheckout,'packages')
+	
+		## Now do a property walk to list packages
+		propList = svnclient.proplist(channelPkgs,recurse=True)
+
+		pkgList = []
+		for propSet in propList:
+			fname      = propSet[0]
+			properties = propSet[1]
+
+			if 'revision' in properties and 'name' in properties:
+				if 'order' in properties:
+					pkgList.append((int(properties['order']),properties['name'],int(properties['revision'])))
+				else:
+					pkgList.append((999999999,properties['name'],properties['revision']))
+
+		## Sort according to install order
+		## use -pkg[0] for reverse
+		pkgList = sorted(pkgList, key=lambda pkg: pkg[0])	
+		
+		for pkgT in pkgList:
+			print pkgT['name']
+
 	else:
 		parser.print_help()
 
