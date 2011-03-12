@@ -13,10 +13,14 @@ import re
 import subprocess
 import errno
 import logging
+import logging.handlers 
+import urllib
+import hashlib
+import errno
 
 ## functions starting with lowercase 's' are for the server component only
 ## functions starting with lowercase 'c' are for the client component only
-## all other functions are intended for both
+## all other functions are intended for both, classes follow the same rules
 
 ################################################################################	
 ################################################################################	
@@ -253,6 +257,34 @@ def isFileImmutable(filePath):
 		return False
 		
 ################################################################################		
+		
+def fetchRemoteMetadata(metadataUrl):
+	inform.debug('Fetching metadata from server')
+	try:
+		f = urllib.urlopen(metadataUrl)
+		jsonData = f.read()
+		f.close()
+	except IOError as e:
+		inform.fatal('Unable to download ' + metadataUrl + ': ' + str(e.strerror))
+
+	try:
+		metadict = json.loads(jsonData)
+	except (TypeError,ValueError) as e:
+		inform.fatal('Unable to understand server metadata: ' + str(e))
+
+	return metadict	
+
+################################################################################	
+
+def shasum(filePath,blocksize=2**20):
+	sha = hashlib.sha256()
+	f = open(filePath,'rb')
+	while True:
+		data = f.read(blocksize)
+		if not data:
+			break;
+		sha.update(data)
+	return sha.hexdigest()
 		
 inform = informant()
 meta = metaman()

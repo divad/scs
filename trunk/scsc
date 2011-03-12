@@ -83,7 +83,6 @@ T   info      CHANNEL     Show channel contents
 		if not options.parent == None:
 			if not metadict['channels'].has_key(options.parent):
 				inform.fatal("The name of the parent channel is invalid")
-							
 				
 		## Workout the SVN root should be
 		svnpath = os.path.join(conf['svnroot'],name)
