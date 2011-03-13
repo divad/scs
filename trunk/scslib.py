@@ -17,6 +17,8 @@ import logging.handlers
 import urllib
 import hashlib
 import errno
+import pwd
+import grp
 
 ## functions starting with lowercase 's' are for the server component only
 ## functions starting with lowercase 'c' are for the client component only
@@ -180,7 +182,22 @@ def sLoadConfig(configFile):
 			conf['scsmroot'] = configValue
 		else:
 			inform.fatal('The scsm root specified in ' + configFile + ' is not a directory')
-
+			
+	if config.has_option('server','svn user'):
+		conf['svnuser'] = config.get('server','svn user')
+	else:
+		conf['svnuser'] = None
+		
+	if config.has_option('server','svn group'):
+		conf['svngroup'] = config.get('server','svn group')
+	else:
+		conf['svngroup'] = None
+		
+	if config.has_option('server','svn chmod'):
+		conf['svnchmod'] = config.get('server','svn chmod')
+	else:
+		conf['svnchmod'] = None
+						
 	return conf	
 	
 def listChannel(chandict,metadict,depth):
@@ -217,7 +234,7 @@ def requireRoot():
 	if not os.geteuid() == 0:
 		inform.fatal("You must be root to run this program")
 		
-def sCreateSVN(path,name):
+def sCreateSVN(path,name,conf):
 	## Validate the name
 	regex = re.compile('^[a-zA-Z\_\-0-9]+$')
 	matched = regex.match(name)
@@ -235,10 +252,31 @@ def sCreateSVN(path,name):
 	if svnadmin.returncode > 0:
 		inform.fatal(stdoutdata)
 		
-	## Change ownership
-	### The SVN repository will probably be accessed via svnserver, apache 
-	### mod_dav_svn or SSH+SVN. As such we can't really leave the 
+	## Fix perms
+	fixPerms(path,conf)
+	
+def fixPerms(path,conf):
+	# Yes, I should probably use os.path.walk and os.chmod, but screw that, thats
+	# so stupidly long winded and this works perfectly fine.
 
+	if not conf['svnchmod'] == None:
+		proc = subprocess.Popen(['chmod', '-R',str(conf['svnchmod']), path],stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+		(stdoutdata, stderrdata) = proc.communicate()
+		if proc.returncode > 0:
+			inform.error(stdoutdata)
+
+	if not conf['svnuser'] == None:		
+		proc = subprocess.Popen(['chown', '-R',conf['svnuser'], path],stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+		(stdoutdata, stderrdata) = proc.communicate()
+		if proc.returncode > 0:
+			inform.error(stdoutdata)
+
+	if not conf['svngroup'] == None:		
+		proc = subprocess.Popen(['chgrp', '-R',conf['svngroup'], path],stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+		(stdoutdata, stderrdata) = proc.communicate()
+		if proc.returncode > 0:
+			inform.error(stdoutdata)
+			
 ################################################################################
 
 def sDeleteSVN(path):

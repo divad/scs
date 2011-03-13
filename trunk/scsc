@@ -12,8 +12,8 @@ import pysvn
 import atexit
 
 def main():
-	## Require root
-	scslib.requireRoot()
+	## If we're root switch to the right user to run, if any
+	scslib.switchUser()conf
 
 	#### HELP TEXT FOR ACTIONS
 	usage = '''Usage: %prog [options] ACTION [...]
@@ -45,7 +45,6 @@ def main():
 	group.add_option('-r','--revision',type="int",default=-1,dest='revision',help='Specify a specific revision of the package to tag')
 	group.add_option('-o','--install-order',type="int",default=-1,dest='instorder',help='Set a installation priority to let scs known what order to install packages')
 	parser.add_option_group(group)
-	
 	(options, args) = parser.parse_args()
 
 	## Load configuration variables
@@ -88,7 +87,7 @@ def main():
 		svnpath = os.path.join(conf['svnroot'],name)
 
 		## Create it there
-		scslib.sCreateSVN(svnpath,name)
+		scslib.sCreateSVN(svnpath,name,conf)
 
 		## Checkout
 		codir = os.path.join(chancodir,name)
@@ -98,7 +97,7 @@ def main():
 		try:
 			os.mkdir(os.path.join(codir,'packages'))
 		except (OSError, IOError) as error:
-			print 'Failed to create base components of channel. Error was: ' + error.strerror + ' on ' + error.filename
+			inform.fatal('Failed to create base components of channel. Error was: ' + error.strerror + ' on ' + error.filename)
 		else:
 			## Add the packages dir
 			svnclient.add(os.path.join(codir,'packages'))
@@ -223,6 +222,9 @@ def main():
 
 			## Checkin
 			revision = svnclient.checkin(channelCheckout,"Added version " + str(taggedRevision) + ' of ' + packageName + ' into channel ' + channelName,recurse=True)
+			
+			## Fix perms
+			fixPerms(path,conf)		
 		
 		except (OSError, IOError) as error:
 			print 'Failed to tag package into channel. Error was: ' + error.strerror + ' on ' + error.filename
@@ -274,6 +276,9 @@ def main():
 
 			## Checkin
 			revision = svnclient.checkin(channelCheckout,"Removed " + packageName + ' from channel ' + channelName,recurse=True)
+			
+			## Fix perms
+			fixPerms(path,conf)				
 		
 		except (OSError, IOError) as error:
 			print 'Failed to untag package from channel. Error was: ' + error.strerror + ' on ' + error.filename
@@ -306,6 +311,9 @@ def main():
 
 			## Checkin
 			revision = svnclient.checkin(channelCheckout,"Removed " + packageName + ' from channel ' + channelName,recurse=True)
+			
+			## Fix perms
+			fixPerms(path,conf)				
 
 		except pysvn.ClientError as error:
 			print 'Subversion operation failed: ' + str(error)
