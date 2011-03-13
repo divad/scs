@@ -227,10 +227,10 @@ def main():
 			fixPerms(path,conf)		
 		
 		except (OSError, IOError) as error:
-			print 'Failed to tag package into channel. Error was: ' + error.strerror + ' on ' + error.filename
+			inform.fatal('Failed to tag package into channel. Error was: ' + error.strerror + ' on ' + error.filename)
 
 		except pysvn.ClientError as error:
-			print 'Subversion operation failed: ' + str(error)
+			inform.fatal('Subversion operation failed: ' + str(error))
 
 	#### CHANNEL UNTAG #####################################################
 	elif action == 'untag' and len(args) == 3:
@@ -281,10 +281,10 @@ def main():
 			fixPerms(path,conf)				
 		
 		except (OSError, IOError) as error:
-			print 'Failed to untag package from channel. Error was: ' + error.strerror + ' on ' + error.filename
+			inform.fatal('Failed to untag package from channel. Error was: ' + error.strerror + ' on ' + error.filename)
 
 		except pysvn.ClientError as error:
-			print 'Subversion operation failed: ' + str(error)
+			inform.fatal('Subversion operation failed: ' + str(error))
 
 	#### PRIORITY #####################################################
 	elif action == 'priority' and len(args) == 4:
@@ -316,7 +316,7 @@ def main():
 			fixPerms(path,conf)				
 
 		except pysvn.ClientError as error:
-			print 'Subversion operation failed: ' + str(error)
+			inform.fatal('Subversion operation failed: ' + str(error))
 
 	elif action == 'info' and len(args) == 2:
 		channelName     = args[1]
@@ -355,6 +355,6 @@ def main():
 
 if __name__ == "__main__":
 	if sys.version < '2.6':
-		inform.fatal('Wrong Python Version !!!')
+		sys.stderr.write('Python 2.6 or greater is required for this program. Exiting.')
 	else:
 	    main()

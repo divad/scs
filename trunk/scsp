@@ -84,7 +84,7 @@ def main():
 			open(os.path.join(checkout,'scripts','preinc'),'w')
 			#open(os.path.join(checkout,'.scs','stepfree'),'w')
 		except (OSError, IOError) as error:
-			print 'Failed to create base components of package. Error was: ' + error.strerror + ' on ' + error.filename
+			inform.fatal('Failed to create base components of package. Error was: ' + error.strerror + ' on ' + error.filename)
 		else:
 			svnclient.add(os.path.join(checkout,'scripts'),recurse=True)
 			#svnclient.add(os.path.join(checkout,'.scs'),recurse=True)
@@ -156,6 +156,6 @@ def main():
 
 if __name__ == "__main__":
 	if sys.version < '2.6':
-		inform.fatal('Wrong Python Version !!!')
+		sys.stderr.write('Python 2.6 or greater is required for this program. Exiting.')
 	else:
 	    main()

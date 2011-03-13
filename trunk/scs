@@ -360,8 +360,7 @@ def main():
 						os.mkdir(localPath)
 						os.mkdir(localPkgs)
 					except (OSError, IOError) as error:
-						print 'Failed to subscribe to channel. Error was: ' + error.strerror + ' on ' + error.filename
-						sys.exit(0)
+						inform.fatal('Failed to subscribe to channel. Error was: ' + error.strerror + ' on ' + error.filename)
 
 					## Download package information
 					svnclient.checkout(remotePath + 'packages',localPkgs)
@@ -501,5 +500,7 @@ def main():
 ################################################################################
 
 if __name__ == "__main__":
-    main()
-
+	if sys.version < '2.6':
+		sys.stderr.write('Python 2.6 or greater is required for this program. Exiting.')
+	else:
+	    main()
