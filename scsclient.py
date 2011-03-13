@@ -673,8 +673,7 @@ class scsClient:
 					os.mkdir(os.path.join(localPath,'scripts'))
 					os.mkdir(os.path.join(localPath,'data'))
 				except (OSError, IOError) as e:
-					print 'Failed to init package. Error was: ' + e.strerror + ' on ' + e.filename
-					sys.exit(0)
+					inform.fatal('Failed to init package. Error was: ' + e.strerror + ' on ' + e.filename)
 
 				## Initial check out of data
 				inform.debug('Deploying package data')
