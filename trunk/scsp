@@ -12,6 +12,9 @@ import pysvn
 import atexit
 
 def main():
+	## Require root
+	scslib.requireRoot()
+
 	usage = '''Usage: %prog [options] ACTION [...]
 	
     list                Lists all packages

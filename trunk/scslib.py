@@ -212,6 +212,10 @@ def listChannels(metadict):
 		## Only print non-child channels
 		if not metadict['channels'][channame].has_key('parent'):	
 			listChannel(metadict['channels'][channame],metadict,depth)
+			
+def requireRoot():
+	if not os.geteuid() == 0:
+		inform.fatal("You must be root to run this program")
 		
 def sCreateSVN(path,name):
 	## Validate the name
@@ -230,6 +234,10 @@ def sCreateSVN(path,name):
 	## Handle errors
 	if svnadmin.returncode > 0:
 		inform.fatal(stdoutdata)
+		
+	## Change ownership
+	### The SVN repository will probably be accessed via svnserver, apache 
+	### mod_dav_svn or SSH+SVN. As such we can't really leave the 
 
 ################################################################################
 

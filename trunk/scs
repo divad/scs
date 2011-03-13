@@ -26,6 +26,9 @@ from scslib import inform, meta
 
 
 def main():
+	## Require root
+	scslib.requireRoot()
+	
 	## Load SVN client
 	svnclient = pysvn.Client()
 
