@@ -12,8 +12,8 @@ import pysvn
 import atexit
 
 def main():
-	## If we're root switch to the right user to run, if any
-	scslib.switchUser()conf
+	## Require root
+	scslib.requireRoot()
 
 	usage = '''Usage: %prog [options] ACTION [...]
 	
