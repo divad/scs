@@ -1,8 +1,8 @@
 #!/usr/bin/python
 
-from distutils.core import setup
+import distutils.core
 
-setup(name='scs',
+distutils.core.setup(name='scs',
       version='1.0',
       license='GPL3',
       description='A unix system configuration tool based around subversion',
