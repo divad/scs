@@ -12,8 +12,8 @@ import pysvn
 import atexit
 
 def main():
-	## Require root
-	scslib.requireRoot()
+	## If we're root switch to the right user to run, if any
+	scslib.switchUser()conf
 
 	usage = '''Usage: %prog [options] ACTION [...]
 	
@@ -64,7 +64,7 @@ def main():
 			inform.fatal("That name is already in use")
 
 		## Create the SVN
-		scslib.sCreateSVN(svnpath,name)
+		scslib.sCreateSVN(svnpath,name,conf)
 
 		## Checkout the new SVN
 		checkout = os.path.join(pkgcodir,name)
