@@ -76,7 +76,7 @@ def main():
 	os.chdir('/tmp')
 
 	#### Parse command line options
-	parser = OptionParser(usage=usage,version='%prog version 3')
+	parser = OptionParser(usage=usage,version='%prog version 4')
 	parser.add_option('-c','--config-file',dest='config',default="/etc/scs.conf",help='Set the configuration file to use')
 	parser.add_option('-f','--force',dest='ignore',default=False,action="store_true",help='Ignore local changes and proceed anyway')
 	parser.add_option('-d','--debug',dest='debug',default=False,action="store_true",help='Print debug messages during execution')
