@@ -2,8 +2,10 @@
 # Subversion Configuration System Manager
 
 import ConfigParser
+import sys
 import os
 import scslib
+from scslib import inform
 from optparse import OptionParser
 
 def main():
@@ -33,9 +35,9 @@ def main():
 		inform.fatal("The scs metadata directory already exists")
 	else:
 		try:
-			os.mkdirs(options.dir)
-			os.mkdir(os.path.join(options.dir,'channels')
-			os.mkdir(os.path.join(options.dir,'packages')
+			os.makedirs(options.dir)
+			os.mkdir(os.path.join(options.dir,'channels'))
+			os.mkdir(os.path.join(options.dir,'packages'))
 			open(os.path.join(options.dir,'client.meta'),'w')
 		except (OSError, IOError) as error:
 			inform.fatal('Failed to initalise the SCS client. Error was: ' + str(error))
