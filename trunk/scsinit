@@ -1,0 +1,60 @@
+#!/usr/bin/python
+# Subversion Configuration System Manager
+
+import ConfigParser
+import os
+import scslib
+from optparse import OptionParser
+
+def main():
+	## Require root
+	scslib.requireRoot()
+
+	## Option parser
+	parser = OptionParser()
+	parser.add_option('-s','--svn',dest='svn',default=None,help='The scs server subversion url')
+	parser.add_option('-d','--dir',dest='dir',default="/opt/scs/client/",help='Directory where scs stores metadata')
+	parser.add_option('-m','--metadata',dest='meta',default=None,help='The server metadata url')
+	parser.add_option('-c','--config-file',dest='config',default="/etc/scs.conf",help='Set the configuration file to use')	
+	(options, args) = parser.parse_args()
+	
+	if options.svn == None:
+		parser.print_help()				
+		inform.fatal("You must specify a subversion url")
+	if options.meta == None:
+		parser.print_help()			
+		inform.fatal("You must specify a metadata url")
+		
+	## TODO validate the metadata url
+	## TODO validate the scs server subversion url
+	
+	## Validate the directory
+	if os.path.exists(options.dir):
+		inform.fatal("The scs metadata directory already exists")
+	else:
+		try:
+			os.mkdirs(options.dir)
+			os.mkdir(os.path.join(options.dir,'channels')
+			os.mkdir(os.path.join(options.dir,'packages')
+			open(os.path.join(options.dir,'client.meta'),'w')
+		except (OSError, IOError) as error:
+			inform.fatal('Failed to initalise the SCS client. Error was: ' + str(error))
+			
+			
+		config = ConfigParser.RawConfigParser()
+		config.add_section('client')
+		config.set('client','svn root',options.svn)
+		config.set('client','scs root',options.dir)
+		config.set('client','metadata url',options.meta)
+		
+		try:
+			with open(options.config,'wb') as configfile:
+				config.write(configfile)
+		except (OSError, IOError) as error:
+			inform.fatal('Failed to write to config file. Error was: ' + str(error))
+	
+if __name__ == "__main__":
+	if sys.version < '2.6':
+		sys.stderr.write('Python 2.6 or greater is required for this program. Exiting.')
+	else:
+	    main()	

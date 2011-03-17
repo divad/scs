@@ -16,6 +16,6 @@ distutils.core.setup(name='scs',
       author='David Bell',
       author_email='dave@evad.info',
       py_modules=['scslib','scsclient'],
-      scripts=['scsc','scs','scsp'],
+      scripts=['scsc','scs','scsp','scsinit'],
       data_files=[('/etc',['etc/scs.conf'])]
       )

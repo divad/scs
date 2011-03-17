@@ -45,18 +45,18 @@ class scsClient:
 			if os.path.isdir(configValue):
 				self.scsroot = configValue
 			else:
-				inform.fatal('The scs root specified in ' + options.config + ' is not a directory')
+				inform.fatal('The scs root specified in ' + filepath + ' is not a directory')
 
 		## svn root
 		if config.has_option('client','svn root'):
 			self.svnroot = config.get('client','svn root')
 		else:
-			inform.fatal('No svn root defined in ' + options.config)
+			inform.fatal('No svn root defined in ' + filepath)
 
 		if config.has_option('client','metadata url'):
 			self.metaurl = config.get('client','metadata url')
 		else:
-			inform.fatal('No metadata url defined in ' + options.config)
+			inform.fatal('No metadata url defined in ' + filepath)
 		
 		## email options
 		if config.has_option('client','smtp server'):
