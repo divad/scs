@@ -14,7 +14,6 @@ from scslib import inform, meta
 
 ## Questions:
 # check is taken from /PREVIOUS/ revision...is that a good thing?
-# Do scsp and scsc really need to run as root?
 
 #### ROADMAP (Future versions)
 # Add "pkg-info" command to print package info on server
