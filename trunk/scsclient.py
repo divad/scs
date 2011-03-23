@@ -515,8 +515,8 @@ class scsClient:
 			## owner - set the owner to
 			if 'owner' in properties:
 				try:
-					pwd = pwd.getpwnam(properties['owner'])
-					uid = pwd[2]
+					pwdid = pwd.getpwnam(properties['owner'])
+					uid = pwdid[2]
 					os.chown(dest,uid)
 				except Exception as e:
 					inform.error('Could not apply owner property to ' + dest + ': ' + str(e))
@@ -525,8 +525,8 @@ class scsClient:
 			## group - set the group to
 			if 'group' in properties:
 				try:
-					grp = grp.getgrnam(properties['group'])
-					gid = grp[2]
+					grpid = grp.getgrnam(properties['group'])
+					gid = grpid[2]
 					os.chown(dest,-1,gid)
 				except Exception as e:
 					inform.error('Could not apply group property to ' + dest + ': ' + str(e))

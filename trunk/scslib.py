@@ -29,7 +29,7 @@ import grp
 ################################################################################
 
 def version():
-	return 7
+	return 8
 	
 def versionStr():
 	return str(version())
