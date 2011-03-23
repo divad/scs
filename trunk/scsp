@@ -24,7 +24,7 @@ def main():
                         Set a package property to VALUE'''
 
 	#### COMMAND LINE PARSER
-	parser = OptionParser(usage=usage,version='scs version 5')
+	parser = OptionParser(usage=usage,version="scs version " + scslib.versionStr())
 	parser.add_option('-c','--config-file',dest='config',default="/etc/scs.conf",help='Set the configuration file to use')
 	group = OptionGroup(parser,"Options for 'create'")
 	group.add_option('-s','--step-free',action='store_true',dest='stepfree',default=False,help='Create a non-transactional package')
