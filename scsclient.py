@@ -733,14 +733,13 @@ class scsClient:
 		if faultOccured:
 			self.suspendPackage(pkg,faultMsg)
 			inform.error('An error occured during the init process. The package "' + pkg + '" is now suspended')
-			return 2
+			return (2,'An error occured during the init process. The package "' + pkg + '" is now suspended')
 		else:
 			## Recursive call package if we're not at the latest now
 			if revisionToUse.number < latestRevision.number:
 				return self.initPkg(pkg)	
 			else:
 				inform.info('Package ' + pkg + ' is now up to date',log=True)
-
-				return 0
+				return (0,None)
 
 client = scsClient()
