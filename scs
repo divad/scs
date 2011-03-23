@@ -379,7 +379,7 @@ def main():
 						if 'order' in properties:
 							pkgList.append((int(properties['order']),properties['name'],int(properties['revision'])))
 						else:
-							pkgList.append((999999999,properties['name'],properties['revision']))
+							pkgList.append((999999999,properties['name'],int(properties['revision'])))
 
 				## Sort according to install order
 				## use -pkg[0] for reverse
