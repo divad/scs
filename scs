@@ -57,8 +57,8 @@ def main():
                                    any local changes that might occur.
         force-all                  As above, but for all installed packages
         owner         FILEPATH     Determine if FILEPATH is owned by a package
-        suspend       CHANNEL      Lock a package so it cannot be updated
-        resume        CHANNEL      Unlock a package
+        suspend       PACKAGE      Lock a package so it cannot be updated
+        resume        PACKAGE      Unlock a package
 
     Channel-related actions:
         subscribed                 List channels this system is subscribed to
@@ -168,7 +168,7 @@ def main():
 				if client.isPackageSuspended(pkg):
 					print '         Status: SUSPENDED'
 					if data.has_key('suspend_reason'):
-						print '        Reason: ' + data['suspend_reason']
+						print '         Reason: ' + data['suspend_reason']
 				else:
 					print '         Status: OK'
 			else:
