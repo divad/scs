@@ -28,6 +28,12 @@ import grp
 ################################################################################	
 ################################################################################
 
+def version():
+	return 6
+	
+def versionStr():
+	return str(version())
+
 ## informant
 ## used for logging to file and stdout/stderr
 class informant:
