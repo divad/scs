@@ -517,7 +517,7 @@ class scsClient:
 				try:
 					pwdid = pwd.getpwnam(properties['owner'])
 					uid = pwdid[2]
-					os.chown(dest,uid)
+					os.chown(dest,uid,-1)
 				except Exception as e:
 					inform.error('Could not apply owner property to ' + dest + ': ' + str(e))
 					faultOccured = True
