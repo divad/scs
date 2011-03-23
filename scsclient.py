@@ -623,10 +623,16 @@ class scsClient:
 		## If this is an upgrade
 		if self.packageInstalled(pkg):
 			upgrade = True
-
+			
 			## Get local revision installed
 			localRevision = int(meta.data['packages'][pkg]['revision'])
 
+			## Is the package suspended?
+			if self.isPackageSuspended(pkg):
+				inform.error("Package '" + pkg + "' is currently suspended: " + meta.data['packages'][pkg]['suspend_reason'])
+				return (1,"Package '" + pkg + "' is currently suspended: " + meta.data['packages'][pkg]['suspend_reason'])
+
+			## Are we already up to date?
 			if localRevision == latestRevision.number:
 				inform.info('Package ' + pkg + ' up to date (revision ' + str(localRevision) + ')')
 				return (0,None)
@@ -634,11 +640,6 @@ class scsClient:
 				revisionToUse = pysvn.Revision(pysvn.opt_revision_kind.number, int(localRevision) + 1)
 
 			inform.info('Updating package "' + pkg + '" to revision ' + str(revisionToUse.number),log=True)
-			
-			## Is the package suspended?
-			if self.isPackageSuspended(pkg):
-				inform.error("Package '" + pkg + "' is currently suspended: " + meta.data['packages'][pkg]['suspend_reason'])
-				return (1,"Package '" + pkg + "' is currently suspended: " + meta.data['packages'][pkg]['suspend_reason'])
 
 			## If we shouldn't then check for local changes
 			if not ignore:
