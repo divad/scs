@@ -33,7 +33,7 @@ def main():
                           Sets the install order PRIORITY on PACKAGE in CHANNEL'''
 
 	#### COMMAND LINE PARSER
-	parser = OptionParser(usage=usage,version='%prog version 4')
+	parser = OptionParser(usage=usage,version='scs version 5')
 	parser.add_option('-c','--config-file',dest='config',default="/etc/scs.conf",help='Set the configuration file to use')
 
 	group = OptionGroup(parser,"Options for 'create'")
@@ -224,7 +224,7 @@ def main():
 			revision = svnclient.checkin(channelCheckout,"Added version " + str(taggedRevision) + ' of ' + packageName + ' into channel ' + channelName,recurse=True)
 			
 			## Fix perms
-			fixPerms(path,conf)		
+			scslib.fixPerms(path,conf)		
 		
 		except (OSError, IOError) as error:
 			inform.fatal('Failed to tag package into channel. Error was: ' + error.strerror + ' on ' + error.filename)
@@ -278,7 +278,7 @@ def main():
 			revision = svnclient.checkin(channelCheckout,"Removed " + packageName + ' from channel ' + channelName,recurse=True)
 			
 			## Fix perms
-			fixPerms(path,conf)				
+			scslib.fixPerms(path,conf)				
 		
 		except (OSError, IOError) as error:
 			inform.fatal('Failed to untag package from channel. Error was: ' + error.strerror + ' on ' + error.filename)
@@ -313,7 +313,7 @@ def main():
 			revision = svnclient.checkin(channelCheckout,"Removed " + packageName + ' from channel ' + channelName,recurse=True)
 			
 			## Fix perms
-			fixPerms(path,conf)				
+			scslib.fixPerms(path,conf)				
 
 		except pysvn.ClientError as error:
 			inform.fatal('Subversion operation failed: ' + str(error))
