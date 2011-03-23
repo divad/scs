@@ -413,7 +413,7 @@ def main():
 
 ################################################################################
 
-		elif action == 'unsubscribe':
+		elif action == 'unsubscribe' and len(args) == 2:
 			channel    = args[1]
 			localPath  = os.path.join(client.scsroot,'channels',channel)
 			localPkgs  = os.path.join(localPath,'packages')
