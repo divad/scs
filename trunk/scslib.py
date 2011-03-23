@@ -29,7 +29,7 @@ import grp
 ################################################################################
 
 def version():
-	return 10
+	return 11
 	
 def versionStr():
 	return str(version())
@@ -87,10 +87,6 @@ class informant:
 			self.logger.info(str(o))
 
 	def fatal(self,o,exitcode=1,log=True):
-		## First save any metadata changes
-		# TODO how to do this??! (pass a class localmeta.save() 
-		#saveMetadata()
-	
 		## Log the fault
 		if log and self.logOpened:
 			self.logger.critical(str(o))
