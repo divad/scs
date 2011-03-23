@@ -172,7 +172,7 @@ class scsClient:
 	def printPackageInfo(self,pkg):
 		data = meta.data['packages'][pkg]
 		if type(data).__name__=='dict':
-			if isPackageSuspended(data['name']):
+			if self.isPackageSuspended(data['name']):
 				flags = 'SUSPENDED'
 			else:
 				flags = 'OK'
@@ -190,7 +190,7 @@ class scsClient:
 	################################################################################
 
 	def suspendPackage(self,pkg,reason):
-		if packageInstalled(pkg):
+		if self.packageInstalled(pkg):
 			meta.data['packages'][pkg]['status'] = 'suspended'
 			meta.data['packages'][pkg]['suspend_reason'] = reason
 			
@@ -198,7 +198,7 @@ class scsClient:
 	################################################################################			
 
 	def resumePackage(self,pkg):
-		if isPackageSuspended(pkg):
+		if self.isPackageSuspended(pkg):
 			del(meta.data['packages'][pkg]['status'])
 			del(meta.data['packages'][pkg]['suspend_reason'])
 			
@@ -206,7 +206,7 @@ class scsClient:
 	################################################################################			
 
 	def isPackageSuspended(self,pkg):
-		if packageInstalled(pkg):
+		if self.packageInstalled(pkg):
 			if meta.data['packages'][pkg].has_key('status'):
 				if meta.data['packages'][pkg]['status'] == 'suspended':
 					return True
@@ -258,8 +258,8 @@ class scsClient:
 	# 1 = false
 	def uninitPkg(self,pkg):
 
-		if packageInstalled(pkg):
-			errorOccured = runScript(pkg,'uninit')
+		if self.packageInstalled(pkg):
+			errorOccured = self.runScript(pkg,'uninit')
 		
 			if errorOccured:
 				return 1
@@ -317,7 +317,7 @@ class scsClient:
 				if meta.data['channels'][name]['parent'] == channel:
 
 					# Then update it
-					updateChannel(name)
+					self.updateChannel(name)
 				
 	################################################################################
 	################################################################################				
@@ -329,7 +329,7 @@ class scsClient:
 		inform.debug('updateChannel(' + channel + ') called')
 		svnclient = pysvn.Client()
 
-		if channelSubscribed(channel):
+		if self.channelSubscribed(channel):
 			remotePath  = self.svnroot + channel + '/'
 			localPath   = os.path.join(self.scsroot,'channels',channel)
 			localPkgs   = os.path.join(localPath,'packages')
@@ -352,7 +352,7 @@ class scsClient:
 				inform.info('Channel "' + channel + '" is up to date')
 
 				## Update child channels
-				updateChildChannels(channel)
+				self.updateChildChannels(channel)
 				return 0
 			else:
 				inform.info('Updating channel "' + channel + '" to revision ' + str(localRevision +1))
@@ -368,7 +368,7 @@ class scsClient:
 				if properties.has_key('name') and properties.has_key('revision') and properties.has_key('action'):
 					if properties['action'] == 'install':
 						## Install 'revision' of 'name'
-						(retCode,faultMsg) = initPkg(properties['name'],int(properties['revision']))
+						(retCode,faultMsg) = self.initPkg(properties['name'],int(properties['revision']))
 					
 						if retCode > 0:
 							inform.error("Could not init/upgrade " + properties['name'] + ". Channel could not be updated")
@@ -396,7 +396,7 @@ class scsClient:
 				elif properties.has_key('name') and properties.has_key('action'):
 					if properties['action'] == 'remove':
 						## Remove 
-						result = uninitPkg(properties['name'])
+						result = self.uninitPkg(properties['name'])
 
 						if result == 1:
 							inform.fatal("Could not upgrade channel. Please correct the error and try to upgrade again")
@@ -415,11 +415,11 @@ class scsClient:
 			if revisionToUse.number < latestRevision:
 		
 				## We need to recursive-call and upgrade again! :)
-				updateChannel(channel)
+				self.updateChannel(channel)
 			
 			else:		
 				## Update child channels
-				updateChildChannels(channel)
+				self.updateChildChannels(channel)
 
 		else:
 			inform.fatal('Not subscribed to channel ' + channel,log=False)
@@ -621,7 +621,7 @@ class scsClient:
 		ignoreList = []
 
 		## If this is an upgrade
-		if packageInstalled(pkg):
+		if self.packageInstalled(pkg):
 			upgrade = True
 
 			## Get local revision installed
@@ -636,14 +636,14 @@ class scsClient:
 			inform.info('Updating package "' + pkg + '" to revision ' + str(revisionToUse.number),log=True)
 			
 			## Is the package suspended?
-			if isPackageSuspended(pkg):
+			if self.isPackageSuspended(pkg):
 				inform.error("Package '" + pkg + "' is currently suspended: " + meta.data['packages'][pkg]['suspend_reason'])
 				return (1,"Package '" + pkg + "' is currently suspended: " + meta.data['packages'][pkg]['suspend_reason'])
 
 			## If we shouldn't then check for local changes
 			if not ignore:
 				inform.info('Checking for local changes',log=True)
-				(localChangesResult,ignoreList) = checkForLocalChanges(pkg)
+				(localChangesResult,ignoreList) = self.checkForLocalChanges(pkg)
 			
 			## If local changes were detected and we must not proceed because of them...
 			if localChangesResult == 3:
@@ -651,7 +651,7 @@ class scsClient:
 				return (1,'One or more files have been changed locally, this must be corrected before upgrading')
 
 			## Pre-increment ("pre-upgrade") script
-			if runScript(pkg,'preinc'):
+			if self.runScript(pkg,'preinc'):
 				inform.error('Could not init package')
 				return (1,'The preinc script returned an error')
 
@@ -688,15 +688,15 @@ class scsClient:
 
 		## Run scripts
 		if upgrade:
-			if runScript(pkg,'preup'):
+			if self.runScript(pkg,'preup'):
 				inform.error('Cancelling package init 1')
 				return (1,'The preup script returned an error')			
 		else:
-			if runScript(pkg,'preinit'):
+			if self.runScript(pkg,'preinit'):
 				inform.error('Cancelling package init 2')
 				return (1,'The preinit script returned an error')
 
-		if runScript(pkg,'preinst'):
+		if self.runScript(pkg,'preinst'):
 			inform.error('Cancelling package init 3')
 			return (1,'The preinst script returned an error')
 
@@ -706,21 +706,21 @@ class scsClient:
 		faultMsg  = ''
 
 		## Install the package data
-		faultOccured = installPackageData(localData,ignoreList=ignoreList)
+		faultOccured = self.installPackageData(localData,ignoreList=ignoreList)
 	
 		if faultOccured:
 			faultMsg = 'A fault occured during applying package data properties'
 	
-		if runScript(pkg,'postinst'):
+		if self.runScript(pkg,'postinst'):
 			faultMsg = 'The postinst script returned an error'
 			faultOccured = True
 
 		if upgrade:
-			if runScript(pkg,'postup'):
+			if self.runScript(pkg,'postup'):
 				faultMsg = 'The postup script returned an error'
 				faultOccured = True
 		else:
-			if runScript(pkg,'postinit'):
+			if self.runScript(pkg,'postinit'):
 				faultMsg = 'The postinit script returned an error'
 				faultOccured = True
 
@@ -731,13 +731,13 @@ class scsClient:
 		meta.data['packages'][pkg] = { 'name': pkg, 'revision': revisionToUse.number, 'desc': packageDescription}
 
 		if faultOccured:
-			suspendPackage(pkg,faultMsg)
+			self.suspendPackage(pkg,faultMsg)
 			inform.error('An error occured during the init process. The package "' + pkg + '" is now suspended')
 			return 2
 		else:
 			## Recursive call package if we're not at the latest now
 			if revisionToUse.number < latestRevision.number:
-				return initPkg(pkg)	
+				return self.initPkg(pkg)	
 			else:
 				inform.info('Package ' + pkg + ' is now up to date',log=True)
 
