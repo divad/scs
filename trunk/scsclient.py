@@ -462,7 +462,7 @@ class scsClient:
 
 				## Deal with immutability
 				if not os.path.islink(dest):
-					if isFileImmutable(dest):
+					if scslib.isFileImmutable(dest):
 						chattr = subprocess.Popen(['chattr', '-i', dest],stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 						(stdoutdata, stderrdata) = chattr.communicate()
 						retcode = chattr.returncode
