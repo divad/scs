@@ -14,10 +14,12 @@ def main():
 
 	## Option parser
 	parser = OptionParser()
-	parser.add_option('-s','--svn',dest='svn',default=None,help='The scs server subversion url')
-	parser.add_option('-d','--dir',dest='dir',default="/opt/scs/",help='Directory where scs stores metadata')
-	parser.add_option('-m','--metadata',dest='meta',default=None,help='The server metadata url')
-	parser.add_option('-c','--config-file',dest='config',default="/etc/scs.conf",help='Set the configuration file to use')	
+	parser.add_option('-s','--svn',dest='svn',default=None,help='The scs server subversion url (Required)')
+	parser.add_option('-d','--dir',dest='dir',default="/opt/scs/",help='Directory where scs stores metadata (Optional)')
+	parser.add_option('-m','--metadata',dest='meta',default=None,help='The server metadata url (Required)')
+	parser.add_option('-c','--config-file',dest='config',default="/etc/scs.conf",help='Set the configuration file to use (Optional)')	
+	parser.add_option('-u','--username',dest='username',default=None,help='The HTTP username when using a http svn url (Optional)')	
+	parser.add_option('-p','--password',dest='password',default=None,help='The HTTP password when using a http svn url (Optional)')
 	(options, args) = parser.parse_args()
 	
 	if options.svn == None:
@@ -45,10 +47,17 @@ def main():
 			
 		config = ConfigParser.RawConfigParser()
 		config.add_section('client')
+		config.add_section('main')		
 		config.set('main','data url',options.dir)		
 		config.set('client','svn url',options.svn)
 		config.set('client','metadata url',options.meta)
 		
+		if not options.username == None:
+			config.set('client','svn username',options.username)
+
+		if not options.password == None:
+			config.set('client','svn password',options.password)			
+
 		try:
 			with open(options.config,'wb') as configfile:
 				config.write(configfile)
