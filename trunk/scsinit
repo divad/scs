@@ -15,7 +15,7 @@ def main():
 	## Option parser
 	parser = OptionParser()
 	parser.add_option('-s','--svn',dest='svn',default=None,help='The scs server subversion url')
-	parser.add_option('-d','--dir',dest='dir',default="/opt/scs/client/",help='Directory where scs stores metadata')
+	parser.add_option('-d','--dir',dest='dir',default="/opt/scs/",help='Directory where scs stores metadata')
 	parser.add_option('-m','--metadata',dest='meta',default=None,help='The server metadata url')
 	parser.add_option('-c','--config-file',dest='config',default="/etc/scs.conf",help='Set the configuration file to use')	
 	(options, args) = parser.parse_args()
@@ -45,8 +45,8 @@ def main():
 			
 		config = ConfigParser.RawConfigParser()
 		config.add_section('client')
-		config.set('client','svn root',options.svn)
-		config.set('client','scs root',options.dir)
+		config.set('main','data url',options.dir)		
+		config.set('client','svn url',options.svn)
 		config.set('client','metadata url',options.meta)
 		
 		try:
@@ -54,6 +54,8 @@ def main():
 				config.write(configfile)
 		except (OSError, IOError) as error:
 			inform.fatal('Failed to write to config file. Error was: ' + str(error))
+			
+		## TODO change mode to 0600
 	
 if __name__ == "__main__":
 	if sys.version < '2.6':

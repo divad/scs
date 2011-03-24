@@ -43,7 +43,7 @@ def main():
 	
 	group = OptionGroup(parser,"Options for 'tag'")
 	group.add_option('-r','--revision',type="int",default=-1,dest='revision',help='Specify a specific revision of the package to tag')
-	group.add_option('-o','--install-order',type="int",default=-1,dest='instorder',help='Set a installation priority to let scs known what order to install packages')
+	group.add_option('-o','--install-order',type="int",default=-1,dest='instorder',help='Set a installation priority to let scs know what order to install packages')
 	parser.add_option_group(group)
 	(options, args) = parser.parse_args()
 
@@ -60,12 +60,9 @@ def main():
 	## Call save on exit
 	atexit.register(meta.save)
 
-	## Load subversion library
-	svnclient = pysvn.Client()
-
 	## Build other paths
-	chancodir = os.path.join(conf['scsmroot'],'channels')
-	pkgcodir  = os.path.join(conf['scsmroot'],'packages')	
+	chancodir = os.path.join(conf['dataroot'],'channels')
+	pkgcodir  = os.path.join(conf['dataroot'],'packages')	
 			
 	## Shortcut to action
 	action = args[0]
