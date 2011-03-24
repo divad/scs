@@ -35,11 +35,8 @@ def main():
 	## Load configuration variables
 	conf = scslib.sLoadConfig(options.config);
 
-	## Load subversion library
-	svnclient = pysvn.Client()
-
 	## Build package path
-	pkgcodir  = os.path.join(conf['scsmroot'],'packages')
+	pkgcodir  = os.path.join(conf['dataroot'],'packages')
 
 	## Deal with no args
 	if len(args) <= 0:

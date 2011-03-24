@@ -16,18 +16,19 @@ import logging
 import smtplib
 from email.mime.text import MIMEText
 import socket
+import re
 
 import scslib
-from scslib import inform, meta
+from scslib import inform, meta, svnclient
 
 class scsClient:
-	scsroot  = '/opt/scs/'
-	svnroot  = ''
+	dataroot = '/opt/scs/'
+	svnurl   = ''
 	metaurl  = ''
-	smtp     = 'rcfg.soton.ac.uk'
-	#smtp     = 'localhost'
-	#mailaddr = None
-	mailaddr = 'notify@scs.soton.ac.uk'
+	smtp     = 'localhost'
+	mailaddr = None
+	svnuser  = None
+	svnpass  = None
 	
 	def loadConfig(self,filepath):
 		config = ConfigParser.RawConfigParser()
@@ -39,19 +40,39 @@ class scsClient:
 		else:
 			inform.openLog('/var/log/scs.log')
 	
-		## scs root
-		if config.has_option('client','scs root'):
-			configValue = config.get('client','scs root')
+		## data root
+		if config.has_option('main','data root'):
+			configValue = config.get('main','data root')
+			
 			if os.path.isdir(configValue):
-				self.scsroot = configValue
+				self.dataroot = os.path.join(configValue,'client')
+				if not os.path.isdir(self.dataroot):
+					inform.fatal('The directory ' + filepath + ' is not a directory or does not exist!')
 			else:
-				inform.fatal('The scs root specified in ' + filepath + ' is not a directory')
+				inform.fatal('The data root specified in ' + filepath + ' is not a directory')
 
-		## svn root
-		if config.has_option('client','svn root'):
-			self.svnroot = config.get('client','svn root')
+		## svn url
+		if config.has_option('client','svn url'):
+			self.svnurl = config.get('client','svn url')
 		else:
-			inform.fatal('No svn root defined in ' + filepath)
+			inform.fatal('No svn url defined in ' + filepath)
+			
+		## svn user (HTTP(S))
+		if config.has_option('client','svn username'):
+			self.svnuser = config.get('client','svn username')
+		else:
+			if re.match('https?\://',self.svnurl):
+				inform.fatal('SVN http url specified but no svn username is defined in ' + filepath)
+			
+		if config.has_option('client','svn password'):
+			self.svnpass = config.get('client','svn password')
+		else:
+			if re.match('https?\://',self.svnurl):
+				inform.fatal('SVN http url specified but no svn password is defined in ' + filepath)
+			
+		## svn url must include a trailing slash
+		if not self.svnurl[-1] == '/':
+			self.svnurl = self.svnurl + '/'
 
 		if config.has_option('client','metadata url'):
 			self.metaurl = config.get('client','metadata url')
@@ -65,6 +86,13 @@ class scsClient:
 		if config.has_option('client','notify email'):
 			configValue = config.get('client','notify email')
 			self.mailaddr = configValue	
+			
+		## Tell svnclient the u/p function
+		svnclient.callback_get_login = self.getSvnLogin
+			
+	## Callback function for pySVN to consult
+	def getSvnLogin(self, realm, username, may_save):
+	    return True, self.svnuser, self.svnpass, False
 
 	## "check" property
 	### before increment it checks all files with "check" property
@@ -75,8 +103,7 @@ class scsClient:
 	#### - skip - don't change /that/ file, and that file alone, on the next increment - DOES NOT OVERWRITE
 	def checkForLocalChanges(self,pkg):
 		ignoreList = []
-		svnclient = pysvn.Client()
-		propList = svnclient.proplist(os.path.join(self.scsroot,'packages',pkg,'data'),recurse=True)
+		propList = svnclient.proplist(os.path.join(self.dataroot,'packages',pkg,'data'),recurse=True)
 	
 		## Return code
 		# 0 - no locally changed files
@@ -148,8 +175,7 @@ class scsClient:
 	################################################################################
 
 	def listFiles(self,pkg):
-		svnclient = pysvn.Client()
-		propList = svnclient.proplist(os.path.join(self.scsroot,'packages',pkg,'data'),recurse=True)
+		propList = svnclient.proplist(os.path.join(self.dataroot,'packages',pkg,'data'),recurse=True)
 
 		for propSet in propList:
 			source     = propSet[0]
@@ -219,7 +245,7 @@ class scsClient:
 	## Runs a package script, returns false 
 	def runScript(self,pkgName,scriptName):
 		inform.debug('Executing ' + scriptName,log=True)
-		scriptPath = os.path.join(self.scsroot,'packages',pkgName,'scripts',scriptName)
+		scriptPath = os.path.join(self.dataroot,'packages',pkgName,'scripts',scriptName)
 
 		## CHMOD First
 		os.chmod(scriptPath,stat.S_IRWXU)
@@ -265,7 +291,7 @@ class scsClient:
 				return 1
 			else:
 				## Delete data
-				shutil.rmtree(os.path.join(self.scsroot,'packages',pkg))
+				shutil.rmtree(os.path.join(self.dataroot,'packages',pkg))
 
 				## Update metadata
 				del(meta.data['packages'][pkg])
@@ -283,9 +309,7 @@ class scsClient:
 	################################################################################
 
 	def isChannelUpToDate(self,channel):
-		svnclient = pysvn.Client()
-	
-		remotePath  = self.svnroot + '/' + channel + '/'
+		remotePath  = self.svnurl + '/' + channel + '/'
 
 		## Get the latest revision of the channel
 		infoList = svnclient.info2(remotePath,recurse=False)
@@ -327,11 +351,10 @@ class scsClient:
 	# 1 Could not upgrade
 	def updateChannel(self,channel):
 		inform.debug('updateChannel(' + channel + ') called')
-		svnclient = pysvn.Client()
 
 		if self.channelSubscribed(channel):
-			remotePath  = self.svnroot + channel + '/'
-			localPath   = os.path.join(self.scsroot,'channels',channel)
+			remotePath  = self.svnurl + channel + '/'
+			localPath   = os.path.join(self.dataroot,'channels',channel)
 			localPkgs   = os.path.join(localPath,'packages')
 			upgradeFile = remotePath + 'upgrade'
 
@@ -428,8 +451,6 @@ class scsClient:
 	################################################################################		
 		
 	def installPackageData(self,localDataPath,ignoreList=[]):
-		svnclient = pysvn.Client()
-
 		## Did a fault occur during property application?
 		faultOccured = False
 
@@ -595,12 +616,9 @@ class scsClient:
 		else:
 			packageDescription = ''
 
-		## SVN
-		svnclient = pysvn.Client()
-
 		## Work out paths
-		remotePath   = self.svnroot + pkg + '/' 
-		localPath    = os.path.join(self.scsroot,'packages',pkg)
+		remotePath   = self.svnurl + pkg + '/' 
+		localPath    = os.path.join(self.dataroot,'packages',pkg)
 		localScripts = os.path.join(localPath,'scripts')
 		localData    = os.path.join(localPath,'data')
 	

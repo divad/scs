@@ -19,6 +19,7 @@ import hashlib
 import errno
 import pwd
 import grp
+import pysvn
 
 ## functions starting with lowercase 's' are for the server component only
 ## functions starting with lowercase 'c' are for the client component only
@@ -29,7 +30,7 @@ import grp
 ################################################################################
 
 def version():
-	return 13
+	return 14
 	
 def versionStr():
 	return str(version())
@@ -156,7 +157,7 @@ def sLoadConfig(configFile):
 	## Defaults
 	conf = {
 		'svnroot': '/opt/scsm/svn/',
-		'scsmroot': '/opt/scsm/',
+		'dataroot': '/opt/scsm/',
 		'metadataPath': '/opt/scsm/www/server.meta'
 	}
 
@@ -178,12 +179,15 @@ def sLoadConfig(configFile):
 		else:
 			inform.fatal('The metadata file specified in ' + configFile + ' is not a file')
 
-	if config.has_option('server','scsm root'):
-		configValue = config.get('server','scsm root')
+	if config.has_option('main','data root'):
+		configValue = config.get('main','data root')
+		
 		if os.path.isdir(configValue):
-			conf['scsmroot'] = configValue
+			conf['dataroot'] = os.path.join(configValue,'server')
+			if not os.path.isdir(conf['dataroot']):
+				inform.fatal('The directory ' + filepath + ' is not a directory or does not exist!')
 		else:
-			inform.fatal('The scsm root specified in ' + configFile + ' is not a directory')
+			inform.fatal('The data root specified in ' + filepath + ' is not a directory')			
 			
 	if config.has_option('server','svn user'):
 		conf['svnuser'] = config.get('server','svn user')
@@ -333,6 +337,13 @@ def shasum(filePath,blocksize=2**20):
 			break;
 		sha.update(data)
 	return sha.hexdigest()
-		
+
+## Load "global" object instances
+# Inform object
 inform = informant()
+
+# metadata object
 meta = metaman()
+
+# svn client
+svnclient = pysvn.Client()

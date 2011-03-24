@@ -10,7 +10,7 @@ import atexit
 import scslib
 import scsclient
 from scsclient import client
-from scslib import inform, meta
+from scslib import inform, meta, svnclient
 
 ## Questions:
 # check is taken from /PREVIOUS/ revision...is that a good thing?
@@ -29,9 +29,6 @@ def main():
 	## Require root
 	scslib.requireRoot()
 	
-	## Load SVN client
-	svnclient = pysvn.Client()
-
 	#### Define the usage text
 	usage = '''Usage: %prog [options] ACTION [...]
 
@@ -95,7 +92,7 @@ def main():
 	client.loadConfig(options.config)	
 
 	## Load metadata
-	meta.load(os.path.join(client.scsroot,'client.meta'))
+	meta.load(os.path.join(client.dataroot,'client.meta'))
 	
 	## Register a close handler so it is saved at exit
 	atexit.register(meta.save)
@@ -128,7 +125,7 @@ def main():
 				if type(data).__name__=='dict':
 				
 					## Get the latest channel revision
-					remotePath  = client.svnroot + '/' + pkgName + '/'
+					remotePath  = client.svnurl + '/' + pkgName + '/'
 
 					## Get the latest revision of the package
 					infoList = svnclient.info2(remotePath,recurse=False)
@@ -224,7 +221,7 @@ def main():
 			pkg = args[1]
 
 			if client.packageInstalled(pkg):
-				dataPath = os.path.join(client.scsroot,'packages',pkg,'data')
+				dataPath = os.path.join(client.dataroot,'packages',pkg,'data')
 				client.installPackageData(dataPath)
 			else:
 				inform.fatal('Package not installed',log=False)
@@ -234,7 +231,7 @@ def main():
 		elif action == 'force-all':
 			for pkg in meta.data['packages']:
 				inform.debug('Forcing package data processing on "' + pkg + '"',log=True)
-				dataPath = os.path.join(client.scsroot,'packages',pkg,'data')			
+				dataPath = os.path.join(client.dataroot,'packages',pkg,'data')			
 				client.installPackageData(dataPath)		
 
 ################################################################################
@@ -243,7 +240,7 @@ def main():
 			pkg = args[1]
 
 			if client.packageInstalled(pkg):
-				dataPath = os.path.join(client.scsroot,'packages',pkg,'data')
+				dataPath = os.path.join(client.dataroot,'packages',pkg,'data')
 				client.listFiles(pkg)
 			else:
 				inform.fatal('No such package')
@@ -260,7 +257,7 @@ def main():
 		elif action == 'owner' and len(args) == 2:
 			fileName = args[1]
 			for pkg in meta.data['packages']:
-				propList = svnclient.proplist(os.path.join(client.scsroot,'packages',pkg,'data'),recurse=True)
+				propList = svnclient.proplist(os.path.join(client.dataroot,'packages',pkg,'data'),recurse=True)
 
 				for propSet in propList:
 					source     = propSet[0]
@@ -315,8 +312,8 @@ def main():
 
 		elif action == 'subscribe' and len(args) == 2:
 			channel    = args[1]
-			remotePath = client.svnroot + '/' + channel + '/'
-			localPath  = os.path.join(client.scsroot,'channels',channel)
+			remotePath = client.svnurl + '/' + channel + '/'
+			localPath  = os.path.join(client.dataroot,'channels',channel)
 			localPkgs  = os.path.join(localPath,'packages')
 
 			## Get package info from server
@@ -415,7 +412,7 @@ def main():
 
 		elif action == 'unsubscribe' and len(args) == 2:
 			channel    = args[1]
-			localPath  = os.path.join(client.scsroot,'channels',channel)
+			localPath  = os.path.join(client.dataroot,'channels',channel)
 			localPkgs  = os.path.join(localPath,'packages')
 
 			if not client.channelSubscribed(channel):
@@ -463,7 +460,7 @@ def main():
 			output = ''
 
 			for channel in meta.data['channels']:
-				remotePath   = client.svnroot + '/' + channel + '/'
+				remotePath   = client.svnurl + '/' + channel + '/'
 
 				## Get latest remote revision
 				infoList = svnclient.info2(remotePath,recurse=False)
