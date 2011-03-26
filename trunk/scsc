@@ -3,7 +3,7 @@
 
 #### IMPORTS
 import scslib
-from scslib import inform, meta
+from scslib import inform, meta, svnclient
 from optparse import OptionParser, OptionGroup
 import os
 import sys
