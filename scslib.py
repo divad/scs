@@ -212,7 +212,7 @@ def listChannel(chandict,metadict,depth):
 	if depth >= 0:
 		for i in range(depth):
 			depthStr += ' '
-		depthStr += u' \u02EA '
+		depthStr += ' + '
 
 	## Channel print
 	if chandict.has_key('desc'):
