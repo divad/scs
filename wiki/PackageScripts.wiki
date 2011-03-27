@@ -12,18 +12,18 @@ The scripts are:
 
 Initial package install:
 
-# init
-# preinst
-# postinst
+  # init
+  # preinst
+  # postinst
 
 On uninit:
 
-# uninit
+  # uninit
 
 On upgrade:
 
-# preinc (old package revision)
-# preup 
-# preinst
-# postinst
-# postup
+  # preinc (old package revision)
+  # preup 
+  # preinst
+  # postinst
+  # postup
