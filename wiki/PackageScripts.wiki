@@ -8,6 +8,22 @@ The scripts are:
 || postinst || script to run after installation of package data ||
 || preinc || script run in existing version package just before new version is installed ||
 
+New scripts...maybe:
+
+  * init
+    * pre
+    * post
+  * upgrade
+    * pre
+    * post
+  * inst
+    * pre
+    * post
+  * uninit 
+    * post
+  * inc
+    * pre
+
 = Script Orders =
 
 Initial package install:
