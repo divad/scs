@@ -482,14 +482,16 @@ class scsClient:
 					action = properties['action']
 
 				## Deal with immutability
-				if not os.path.islink(dest):
-					if scslib.isFileImmutable(dest):
-						chattr = subprocess.Popen(['chattr', '-i', dest],stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-						(stdoutdata, stderrdata) = chattr.communicate()
-						retcode = chattr.returncode
+				# if file exists, and isn't a symbolic link....
+				if os.path.exists(dest):
+					if not os.path.islink(dest):				
+						if scslib.isFileImmutable(dest):
+							chattr = subprocess.Popen(['chattr', '-i', dest],stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+							(stdoutdata, stderrdata) = chattr.communicate()
+							retcode = chattr.returncode
 
-						if retcode > 0:
-							inform.debug('Unable to remove immutable flag from ' + dest)
+							if retcode > 0:
+								inform.debug('Unable to remove immutable flag from ' + dest)
 
 				if action == 'copy':
 					try:
