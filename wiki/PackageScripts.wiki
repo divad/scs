@@ -1,0 +1,29 @@
+The scripts are:
+
+|| init || script to run when package installed ||
+|| uninit || script to run when package removed ||
+|| preup || script to run when package upgraded, before upgrade ||
+|| postup || script to run when package is upgraded, after upgrade ||
+|| preinst || script to run before installation of package data ||
+|| postinst || script to run after installation of package data ||
+|| preinc || script run in existing version package just before new version is installed ||
+
+= Script Orders =
+
+Initial package install:
+
+# init
+# preinst
+# postinst
+
+On uninit:
+
+# uninit
+
+On upgrade:
+
+# preinc (old package revision)
+# preup 
+# preinst
+# postinst
+# postup
