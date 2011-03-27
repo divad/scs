@@ -605,7 +605,7 @@ class scsClient:
 	def initPkg(self,pkg,rev=-1,ignore=False):
 		## See if the package requested actually exists
 		found = False
-		for pkgName in remoteMeta['packages']:
+		for pkgName in self.remoteMeta['packages']:
 			if pkgName == pkg:
 				found = True
 
@@ -614,8 +614,8 @@ class scsClient:
 			inform.error('Could not find package to install in server metadata')
 			return (1,'Could not find package to install in server metadata')
 
-		if remoteMeta['packages'][pkg].has_key('desc'):
-			packageDescription = remoteMeta['packages'][pkg]['desc']
+		if self.remoteMeta['packages'][pkg].has_key('desc'):
+			packageDescription = self.remoteMeta['packages'][pkg]['desc']
 		else:
 			packageDescription = ''
 
