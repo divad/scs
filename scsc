@@ -91,7 +91,7 @@ def main():
 		svnclient.checkout('file://' + svnpath, codir)
 
 		## Create packages dir
-		try:/usr/sbin/
+		try:
 			os.mkdir(os.path.join(codir,'packages'))
 		except (OSError, IOError) as error:
 			inform.fatal('Failed to create base components of channel. Error was: ' + error.strerror + ' on ' + error.filename)
