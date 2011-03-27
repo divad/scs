@@ -12,6 +12,10 @@ import scsclient
 from scsclient import client
 from scslib import inform, meta, svnclient
 
+# TODO
+# check when deleting things like pkgs on client and server if the package is 
+# needed by a channel (client) or is in a channel (server).
+
 ## Questions:
 # check is taken from /PREVIOUS/ revision...is that a good thing?
 
@@ -143,8 +147,8 @@ def main():
 					inform.fatal('Unable to understand data: ' + str(e))
 
 			if len(output) > 0:
-				print '{0:14}  {1:8}  {2:44}'.format('PACKAGE NAME','REVISION','DESCRIPTION')
-				print '{0:14}  {1:8}  {2:44}'.format('------------','--------','-----------')
+				print "{0:14}  {1:8}  {2:44}\n".format('PACKAGE NAME','REVISION','DESCRIPTION')
+				print "{0:14}  {1:8}  {2:44}\n".format('------------','--------','-----------')
 				sys.stdout.write(output)
 
 ################################################################################
@@ -469,11 +473,11 @@ def main():
 					latestRevision = infoDict['rev']
 
 				if latestRevision.number > int(meta.data['channels'][channel]['revision']):
-					output += '{0:24}    {1:24}    {2:24}'.format(channel,str(latestRevision.number), str(meta.data['channels'][channel]['revision']))
+					output += "{0:24}    {1:24}    {2:24}\n".format(channel,str(latestRevision.number), str(meta.data['channels'][channel]['revision']))
 
 			if len(output) > 0:
-				print '{0:24}    {1:24}    {2:24}'.format('CHANNEL NAME','LATEST REVISION','LOCAL REVISION')
-				print '{0:24}    {1:24}    {2:24}'.format('------------','---------------','--------------')
+				print "{0:24}    {1:24}    {2:24}\n".format('CHANNEL NAME','LATEST REVISION','LOCAL REVISION')
+				print "{0:24}    {1:24}    {2:24}\n".format('------------','---------------','--------------')
 				print output
 
 ################################################################################

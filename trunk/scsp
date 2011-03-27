@@ -136,13 +136,13 @@ def main():
 			pkgdict = meta.data['packages'][pkgname]
 			
 			if pkgdict.has_key('desc'):
-				output += '{0:14}  {1:64}'.format(pkgdict['name'],pkgdict['desc'])
+				output += "{0:14}  {1:64}\n".format(pkgdict['name'],pkgdict['desc'])
 			else:
-				output += '{0:14}  {1:64}'.format(pkgdict['name'],'N/A')
+				output += "{0:14}  {1:64}\n".format(pkgdict['name'],'N/A')
 			
 		if len(output) > 0:
-			print '{0:14}  {1:64}'.format('PACKAGE NAME','DESCRIPTION')
-			print '{0:14}  {1:64}'.format('------------','-----------')
+			print "{0:14}  {1:64}\n".format('PACKAGE NAME','DESCRIPTION')
+			print "{0:14}  {1:64}\n".format('------------','-----------')
 			sys.stdout.write(output)		
 			
 	else:
