@@ -329,6 +329,7 @@ def main():
 		propList = svnclient.proplist(channelPkgs,recurse=True)
 
 		pkgList = []
+		pkgUnsorted = []
 		for propSet in propList:
 			fname      = propSet[0]
 			properties = propSet[1]
@@ -337,14 +338,17 @@ def main():
 				if 'order' in properties:
 					pkgList.append((int(properties['order']),properties['name'],int(properties['revision'])))
 				else:
-					pkgList.append((999999999,properties['name'],int(properties['revision'])))
+					pkgUnsorted.append((properties['name'],int(properties['revision'])))
 
 		## Sort according to install order
 		## use -pkg[0] for reverse
 		pkgList = sorted(pkgList, key=lambda pkg: pkg[0])	
 		
 		for pkgTuple in pkgList:
-			print pkgTuple[1] + '-' + str(pkgTuple[2])
+			print pkgTuple[1] + '-' + str(pkgTuple[2]) + ' (' + str(pkgTuple[0]) + ')'
+			
+		for pkgTuple in pkgUnsorted:
+			print pkgTuple[0] + '-' + str(pkgTuple[1])			
 
 	else:
 		parser.print_help()
