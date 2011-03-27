@@ -91,7 +91,7 @@ def main():
 		svnclient.checkout('file://' + svnpath, codir)
 
 		## Create packages dir
-		try:
+		try:/usr/sbin/
 			os.mkdir(os.path.join(codir,'packages'))
 		except (OSError, IOError) as error:
 			inform.fatal('Failed to create base components of channel. Error was: ' + error.strerror + ' on ' + error.filename)
@@ -337,14 +337,14 @@ def main():
 				if 'order' in properties:
 					pkgList.append((int(properties['order']),properties['name'],int(properties['revision'])))
 				else:
-					pkgList.append((999999999,properties['name'],properties['revision']))
+					pkgList.append((999999999,properties['name'],int(properties['revision'])))
 
 		## Sort according to install order
 		## use -pkg[0] for reverse
 		pkgList = sorted(pkgList, key=lambda pkg: pkg[0])	
 		
-		for pkgT in pkgList:
-			print pkgT[1] + '-' + pkgT[2]
+		for pkgTuple in pkgList:
+			print pkgTuple[1] + '-' + str(pkgTuple[2])
 
 	else:
 		parser.print_help()
