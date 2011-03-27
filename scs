@@ -15,6 +15,7 @@ from scslib import inform, meta, svnclient
 # TODO
 # check when deleting things like pkgs on client and server if the package is 
 # needed by a channel (client) or is in a channel (server).
+# non-transactional packages
 
 ## Questions:
 # check is taken from /PREVIOUS/ revision...is that a good thing?
@@ -46,7 +47,7 @@ def main():
 
         installed                  List installed packages
         packages                   List all available packages
-        status        PACKAGE      Show the package status          
+        status        PACKAGE      Show the package status         
 
     Package maintenance functions: 
 
@@ -470,7 +471,7 @@ def main():
 			if len(output) > 0:
 				print "{0:24}    {1:24}    {2:24}".format('CHANNEL NAME','LATEST REVISION','LOCAL REVISION')
 				print "{0:24}    {1:24}    {2:24}".format('------------','---------------','--------------')
-				print output
+				sys.stdout.write(output)
 
 ################################################################################
 
