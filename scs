@@ -122,10 +122,9 @@ def main():
 ################################################################################
 
 		elif action == 'packages':
-			remoteMeta = scslib.fetchRemoteMetadata(client.metaurl)
 			output = ''
-			for pkgName in remoteMeta['packages']:
-				data = remoteMeta['packages'][pkgName]
+			for pkgName in client.remoteMeta['packages']:
+				data = client.remoteMeta['packages'][pkgName]
 				if type(data).__name__=='dict':
 				
 					## Get the latest channel revision
@@ -279,12 +278,9 @@ def main():
 			## Store package name in a friendly variable
 			pkg = args[1]
 
-			## Get metadata from server
-			remoteMeta = scslib.fetchRemoteMetadata(client.metaurl)
-
 			## See if the package requested actually exists
 			found = False
-			for pkgName in remoteMeta['packages']:
+			for pkgName in client.remoteMeta['packages']:
 				if pkgName == pkg:
 					found = True
 
@@ -304,8 +300,7 @@ def main():
 ################################################################################
 
 		elif action == 'channels':
-			remoteMeta = scslib.fetchRemoteMetadata(client.metaurl)
-			scslib.listChannels(remoteMeta)
+			scslib.listChannels(client.remoteMeta)
 			
 ################################################################################
 
@@ -320,12 +315,9 @@ def main():
 			localPath  = os.path.join(client.dataroot,'channels',channel)
 			localPkgs  = os.path.join(localPath,'packages')
 
-			## Get package info from server
-			remoteMeta = scslib.fetchRemoteMetadata(client.metaurl)
-
 			## See if the channel requested actually exists
 			found = False
-			for channelName in remoteMeta['channels']:
+			for channelName in client.remoteMeta['channels']:
 				if channelName == channel:
 					found = True
 
@@ -333,8 +325,8 @@ def main():
 			if not found:
 				inform.fatal('No such channel exists on the server')
 
-			if remoteMeta['channels'][channel].has_key('desc'):
-				channelDescription = remoteMeta['channels'][channel]['desc']
+			if client.remoteMeta['channels'][channel].has_key('desc'):
+				channelDescription = client.remoteMeta['channels'][channel]['desc']
 			else:
 				channelDescription = ''
 
@@ -343,13 +335,13 @@ def main():
 			else:
 
 				## If this a child channel
-				if remoteMeta['channels'][channel].has_key('parent'):
+				if client.remoteMeta['channels'][channel].has_key('parent'):
 					## Make sure we've installed the parent...
-					if not client.channelSubscribed(remoteMeta['channels'][channel]['parent']):
+					if not client.channelSubscribed(client.remoteMeta['channels'][channel]['parent']):
 						inform.fatal('To subscribe to a child channel you must first subscribe to its parent')
 					else:
 						## Make sure the parent is up to date first... (the key component of a "child" channel)
-						if not client.isChannelUpToDate(remoteMeta['channels'][channel]['parent']):
+						if not client.isChannelUpToDate(client.remoteMeta['channels'][channel]['parent']):
 							inform.fatal('The parent channel is not up to date. You must update it first')
 
 				if not os.path.isdir(localPath):
@@ -406,8 +398,8 @@ def main():
 				meta.data['channels'][channel] = { 'name': channel, 'revision': localRevision, 'desc' : channelDescription}
 				
 				## Update metadata
-				if remoteMeta['channels'][channel].has_key('parent'):
-					meta.data['channels'][channel]['parent'] = remoteMeta['channels'][channel]['parent']
+				if client.remoteMeta['channels'][channel].has_key('parent'):
+					meta.data['channels'][channel]['parent'] = client.remoteMeta['channels'][channel]['parent']
 
 				## Output
 				inform.info('Subscribed to channel ' + channel + ' - at revision ' + str(localRevision),log=True)

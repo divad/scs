@@ -17,7 +17,6 @@ import smtplib
 from email.mime.text import MIMEText
 import socket
 import re
-
 import scslib
 from scslib import inform, meta, svnclient
 
@@ -29,7 +28,9 @@ class scsClient:
 	mailaddr = None
 	svnuser  = None
 	svnpass  = None
+	remoteMeta = None
 	
+	## This is bascially a constructor, except I can't call it immediatley (why?)
 	def loadConfig(self,filepath):
 		config = ConfigParser.RawConfigParser()
 		config.read(filepath)
@@ -89,6 +90,9 @@ class scsClient:
 			
 		## Tell svnclient the u/p function
 		svnclient.callback_get_login = self.getSvnLogin
+		
+		## Fetch remote metadata!
+		self.remoteMeta = scslib.fetchRemoteMetadata(self.metaurl)
 			
 	## Callback function for pySVN to consult
 	def getSvnLogin(self, realm, username, may_save):
@@ -599,9 +603,6 @@ class scsClient:
 	# Returns a string or None, if 1/2 its a string saying why, useful for logging or whatever
 
 	def initPkg(self,pkg,rev=-1,ignore=False):
-		## Get package info from server
-		remoteMeta = scslib.fetchRemoteMetadata(self.metaurl)
-
 		## See if the package requested actually exists
 		found = False
 		for pkgName in remoteMeta['packages']:
