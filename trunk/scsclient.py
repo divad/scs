@@ -187,14 +187,14 @@ class scsClient:
 
 			if 'dest' in properties:
 				dest = properties['dest']
-				print "{0:38}  {1:38}\n".format(dest, source)
+				print "{0:38}  {1:38}".format(dest, source)
 
 	################################################################################
 	################################################################################
 
 	def printPackageHeader(self):
-		print "{0:14}  {1:14}  {2:9}  {3:37}\n".format('PACKAGE NAME','REVISION','STATUS','DESCRIPTION')
-		print "{0:14}  {1:14}  {2:9}  {3:37}\n".format('------------','--------','------','-----------')
+		print "{0:14}  {1:14}  {2:9}  {3:37}".format('PACKAGE NAME','REVISION','STATUS','DESCRIPTION')
+		print "{0:14}  {1:14}  {2:9}  {3:37}".format('------------','--------','------','-----------')
 
 	################################################################################
 	################################################################################
@@ -208,9 +208,9 @@ class scsClient:
 				flags = 'OK'
 
 			if data.has_key('name') and data.has_key('revision') and data.has_key('desc'):
-				print "{0:14}  {1:14}  {2:9}  {3:37}\n".format(str(data['name']), str(data['revision']), flags, str(data['desc']))
+				print "{0:14}  {1:14}  {2:9}  {3:37}".format(str(data['name']), str(data['revision']), flags, str(data['desc']))
 			elif data.has_key('name') and data.has_key('revision'):
-				print "{0:14}  {1:14}  {2:9}  {3:37}\n".format(str(data['name']), str(data['revision']), flags,'N/A')
+				print "{0:14}  {1:14}  {2:9}  {3:37}".format(str(data['name']), str(data['revision']), flags,'N/A')
 			else:
 				inform.fatal('Unable to understand data: ' + str(e))
 		else:
