@@ -49,7 +49,7 @@ class scsClient:
 				if not os.path.isdir(self.dataroot):
 					inform.fatal('The directory ' + self.dataroot + ' is not a directory or does not exist!')
 			else:
-				inform.fatal('The data root specified in ' + filepath + ' is not a directory')				
+				inform.fatal('The data root specified in ' + configValue + ' is not a directory')				
 				
 		## svn url
 		if config.has_option('client','svn url'):

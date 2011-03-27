@@ -38,9 +38,10 @@ def main():
 	else:
 		try:
 			os.makedirs(options.dir)
-			os.mkdir(os.path.join(options.dir,'channels'))
-			os.mkdir(os.path.join(options.dir,'packages'))
-			open(os.path.join(options.dir,'client.meta'),'w')
+			os.mkdir(os.path.join(options.dir,'client'))			
+			os.mkdir(os.path.join(options.dir,'client','channels'))
+			os.mkdir(os.path.join(options.dir,'client','packages'))
+			open(os.path.join(options.dir,'client','client.meta'),'w')
 		except (OSError, IOError) as error:
 			inform.fatal('Failed to initalise the SCS client. Error was: ' + str(error))
 			
