@@ -3,7 +3,7 @@
 import distutils.core
 
 distutils.core.setup(name='scs',
-      version='23',
+      version='24',
       license='GPL3',
       description='A unix system configuration tool based around subversion',
       long_description='''SCS is a configuration management system for Unix 
