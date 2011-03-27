@@ -30,7 +30,7 @@ import pysvn
 ################################################################################
 
 def version():
-	return 20
+	return 21
 	
 def versionStr():
 	return str(version())
@@ -87,14 +87,14 @@ class informant:
 		if log and self.logOpened:
 			self.logger.info(str(o))
 
-	def fatal(self,o,exitcode=1,log=True):
+	def fatal(self,o,code=1,log=True):
 		## Log the fault
 		if log and self.logOpened:
 			self.logger.critical(str(o))
 	
 		## Panic and quit
 		sys.stderr.write('FATAL: ' + str(o) + "\n")
-		sys.exit(exitcode)
+		sys.exit(code)
 		
 ################################################################################	
 ################################################################################	
