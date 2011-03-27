@@ -221,7 +221,7 @@ def main():
 			revision = svnclient.checkin(channelCheckout,"Added version " + str(taggedRevision) + ' of ' + packageName + ' into channel ' + channelName,recurse=True)
 			
 			## Fix perms
-			scslib.fixPerms(path,conf)		
+			scslib.fixPerms(pkgSvnPath,conf)
 		
 		except (OSError, IOError) as error:
 			inform.fatal('Failed to tag package into channel. Error was: ' + error.strerror + ' on ' + error.filename)
@@ -235,6 +235,7 @@ def main():
 		## Setup variables
 		channelName     = args[1]
 		packageName     = args[2]
+		channelSvnPath  = os.path.join(conf['svnroot'],channelName)		
 		channelCheckout = os.path.join(chancodir,channelName)
 		pkgConfigFile   = os.path.join(channelCheckout,'packages',packageName)
 		pkgUpgradeFile  = os.path.join(channelCheckout,'upgrade')
@@ -275,7 +276,7 @@ def main():
 			revision = svnclient.checkin(channelCheckout,"Removed " + packageName + ' from channel ' + channelName,recurse=True)
 			
 			## Fix perms
-			scslib.fixPerms(path,conf)				
+			scslib.fixPerms(channelSvnPath,conf)
 		
 		except (OSError, IOError) as error:
 			inform.fatal('Failed to untag package from channel. Error was: ' + error.strerror + ' on ' + error.filename)
@@ -290,6 +291,7 @@ def main():
 		channelName     = args[1]
 		packageName     = args[2]
 		installOrder    = args[3]
+		channelSvnPath  = os.path.join(conf['svnroot'],channelName)
 		channelCheckout = os.path.join(chancodir,channelName)
 		pkgConfigFile   = os.path.join(channelCheckout,'packages',packageName)
 
@@ -310,7 +312,7 @@ def main():
 			revision = svnclient.checkin(channelCheckout,"Removed " + packageName + ' from channel ' + channelName,recurse=True)
 			
 			## Fix perms
-			scslib.fixPerms(path,conf)				
+			scslib.fixPerms(channelSvnPath,conf)
 
 		except pysvn.ClientError as error:
 			inform.fatal('Subversion operation failed: ' + str(error))
