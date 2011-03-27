@@ -141,8 +141,8 @@ def main():
 				output += "{0:14}  {1:64}\n".format(pkgdict['name'],'N/A')
 			
 		if len(output) > 0:
-			print "{0:14}  {1:64}\n".format('PACKAGE NAME','DESCRIPTION')
-			print "{0:14}  {1:64}\n".format('------------','-----------')
+			print "{0:14}  {1:64}".format('PACKAGE NAME','DESCRIPTION')
+			print "{0:14}  {1:64}".format('------------','-----------')
 			sys.stdout.write(output)		
 			
 	else:

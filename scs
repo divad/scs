@@ -146,8 +146,8 @@ def main():
 					inform.fatal('Unable to understand data: ' + str(e))
 
 			if len(output) > 0:
-				print "{0:14}  {1:8}  {2:44}\n".format('PACKAGE NAME','REVISION','DESCRIPTION')
-				print "{0:14}  {1:8}  {2:44}\n".format('------------','--------','-----------')
+				print "{0:14}  {1:8}  {2:44}".format('PACKAGE NAME','REVISION','DESCRIPTION')
+				print "{0:14}  {1:8}  {2:44}".format('------------','--------','-----------')
 				sys.stdout.write(output)
 
 ################################################################################
@@ -468,8 +468,8 @@ def main():
 					output += "{0:24}    {1:24}    {2:24}\n".format(channel,str(latestRevision.number), str(meta.data['channels'][channel]['revision']))
 
 			if len(output) > 0:
-				print "{0:24}    {1:24}    {2:24}\n".format('CHANNEL NAME','LATEST REVISION','LOCAL REVISION')
-				print "{0:24}    {1:24}    {2:24}\n".format('------------','---------------','--------------')
+				print "{0:24}    {1:24}    {2:24}".format('CHANNEL NAME','LATEST REVISION','LOCAL REVISION')
+				print "{0:24}    {1:24}    {2:24}".format('------------','---------------','--------------')
 				print output
 
 ################################################################################
