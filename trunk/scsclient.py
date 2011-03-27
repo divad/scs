@@ -126,8 +126,8 @@ class scsClient:
 
 				## Get SHA sums
 				try:
-					sourceh = shasum(source)
-					desth   = shasum(dest)
+					sourceh = scslib.shasum(source)
+					desth   = scslib.shasum(dest)
 				except Exception as e:
 					inform.warn('Cannot check for local changes on ' + dest + ': ' + str(e))
 				else:
