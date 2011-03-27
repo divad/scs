@@ -48,7 +48,7 @@ def main():
 		config = ConfigParser.RawConfigParser()
 		config.add_section('client')
 		config.add_section('main')		
-		config.set('main','data url',options.dir)		
+		config.set('main','data root',options.dir)		
 		config.set('client','svn url',options.svn)
 		config.set('client','metadata url',options.meta)
 		
