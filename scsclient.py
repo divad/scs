@@ -263,11 +263,11 @@ class scsClient:
 			if not script.returncode == 0:
 				inform.error(stdoutdata)
 		
-			## Log the error
-			inform.error(scriptName + ' script returned non-zero')
+				## Log the error
+				inform.error(scriptName + ' script returned non-zero')
 		
-			## Return true to say we found an error
-			return True
+				## Return true to say we found an error
+				return True
 		
 		except OSError as e:
 			inform.error('Execution of script ' + scriptName + ' failed: ' + str(e))
