@@ -168,14 +168,9 @@ def main():
 			pkgdict = meta.data['packages'][pkgname]
 			
 			if pkgdict.has_key('desc'):
-				output += "{0:14}  {1:64}\n".format(pkgdict['name'],pkgdict['desc'])
+				print pkgdict['name'] + '(' + pkgdict['desc'] + ')'
 			else:
-				output += "{0:14}  {1:64}\n".format(pkgdict['name'],'N/A')
-			
-		if len(output) > 0:
-			print "{0:14}  {1:64}".format('PACKAGE NAME','DESCRIPTION')
-			print "{0:14}  {1:64}".format('------------','-----------')
-			sys.stdout.write(output)		
+				print pkgdict['name'] + '(No description set)'	
 			
 	else:
 		parser.print_help()
