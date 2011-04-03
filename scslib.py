@@ -30,7 +30,7 @@ import pysvn
 ################################################################################
 
 def version():
-	return 32
+	return 33
 	
 def versionStr():
 	return str(version())
@@ -260,6 +260,28 @@ def sCreateSVN(path,name,conf):
 		
 	## Fix perms
 	fixPerms(path,conf)
+	
+def sCloneSVN(oldpath,newpath,name,conf):
+	## Validate the name
+	regex = re.compile('^[a-zA-Z\_\-0-9]+$')
+	matched = regex.match(name)
+	if not matched:
+		inform.fatal('Invalid name! Name must only contain a-z, 0-9 or the characters _ and -')
+
+	## Check dir doesnt already exist
+	if os.path.exists(newpath):
+		inform.fatal('A subversion repository with that name already exists')
+
+	svnadmin = subprocess.Popen(['svnadmin', 'hotcopy', oldpath, newpath],stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+	(stdoutdata, stderrdata) = svnadmin.communicate()
+
+	## Handle errors
+	if svnadmin.returncode > 0:
+		inform.fatal(stdoutdata)
+		
+	## Fix perms
+	fixPerms(oldpath,conf)
+	fixPerms(newpath,conf)
 	
 def fixPerms(path,conf):
 	# Yes, I should probably use os.path.walk and os.chmod, but screw that, thats
