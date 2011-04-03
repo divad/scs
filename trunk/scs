@@ -13,6 +13,7 @@ from scsclient import client
 from scslib import inform, meta, svnclient
 
 # TODO
+# take backup of existing files when init'ing or when local changes found
 # check when deleting things like pkgs on client and server if the package is 
 # needed by a channel (client) or is in a channel (server).
 # non-transactional packages

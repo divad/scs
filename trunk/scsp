@@ -17,17 +17,17 @@ def main():
 
 	usage = '''Usage: %prog [options] ACTION [...]
 	
-    list                Lists all packages
-    create    NAME      Create a package
-    delete    NAME      Deletes a package
-    set       NAME PROPERTY VALUE     
-                        Set a package property to VALUE'''
+    list                                      Lists all packages
+    create    NAME                            Create a package
+    delete    NAME                            Deletes a package
+    clone     EXISTING-NAME CLONED-NAME       Clone an existing package 
+    set       NAME PROPERTY VALUE             Set a package property to VALUE'''
 
 	#### COMMAND LINE PARSER
 	parser = OptionParser(usage=usage,version="scs version " + scslib.versionStr())
 	parser.add_option('-c','--config-file',dest='config',default="/etc/scs.conf",help='Set the configuration file to use')
 	group = OptionGroup(parser,"Options for 'create'")
-	group.add_option('-s','--step-free',action='store_true',dest='stepfree',default=False,help='Create a non-transactional package')
+	group.add_option('-s','--step-free',action='store_true',dest='stepfree',default=False,help='Create a idempotent package')
 	group.add_option('-d','--desc',dest='desc',default=None,help='Set package description')
 	parser.add_option_group(group)
 	(options, args) = parser.parse_args()
@@ -102,6 +102,38 @@ def main():
 
 		## Cleanup in all cases
 		shutil.rmtree(checkout)
+		
+	#### PACKAGE CREATE ####################################################
+	if action == 'clone' and len(args) == 3:
+		oldname = args[1]
+		newname = args[2]
+		oldsvnpath = os.path.join(conf['svnroot'],oldname)
+		newsvnpath = os.path.join(conf['svnroot'],newname)
+		
+		if not meta.data['packages'].has_key(oldname):
+			inform.fatal("That package does not exist")		
+
+		## the name must be unique across packages and channels
+		if meta.data['channels'].has_key(name) or meta.data['packages'].has_key(newname):
+			inform.fatal("That name is already in use")
+
+		## Clone the SVN
+		scslib.sCloneSVN(oldsvnpath,newsvnpath,newname,conf)
+
+		## Record in meta.data for lating saving into metafile
+		meta.data['packages'][newname] = meta.data['packages'][oldname]
+		meta.data['packages'][newname] = {'name': newname}
+			
+		## Other options
+		if options.stepfree:
+			meta.data['packages'][newname]['type'] = 'idempotent'
+		else:
+			meta.data['packages'][newname]['type'] = 'transactional'
+				
+		if not options.desc == None:
+			meta.data['packages'][newname]['desc'] = options.desc
+		else:
+			meta.data['packages'][newname]['desc'] = 'Cloned from package ' + oldname
 		
 	#### PACKAGE SET #######################################################
 	elif action == 'set' and len(args) == 4:
