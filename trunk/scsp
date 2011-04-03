@@ -104,7 +104,7 @@ def main():
 		shutil.rmtree(checkout)
 		
 	#### PACKAGE CREATE ####################################################
-	if action == 'clone' and len(args) == 3:
+	elif action == 'clone' and len(args) == 3:
 		oldname = args[1]
 		newname = args[2]
 		oldsvnpath = os.path.join(conf['svnroot'],oldname)
