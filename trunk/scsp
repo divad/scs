@@ -163,7 +163,7 @@ def main():
 
 	#### PACKAGE LIST ######################################################
 	elif action == 'list':
-		pkgNames = sorted(meta.data['packages'].keys(), key=str.lower)
+		pkgNames = sorted(meta.data['packages'].keys())
 		
 		for pkgname in pkgNames:
 			pkgdict = meta.data['packages'][pkgname]
