@@ -163,14 +163,15 @@ def main():
 
 	#### PACKAGE LIST ######################################################
 	elif action == 'list':
-		output = ''
-		for pkgname in meta.data['packages']:
+		pkgNames = sorted(meta.data['packages'].keys(), key=str.lower)
+		
+		for pkgname in pkgNames:
 			pkgdict = meta.data['packages'][pkgname]
 			
 			if pkgdict.has_key('desc'):
-				print pkgdict['name'] + '(' + pkgdict['desc'] + ')'
+				print pkgdict['name'] + ' (' + pkgdict['desc'] + ')'
 			else:
-				print pkgdict['name'] + '(No description set)'	
+				print pkgdict['name'] + ' (No description set)'	
 			
 	else:
 		parser.print_help()
