@@ -624,7 +624,7 @@ class scsClient:
 		localPath    = os.path.join(self.dataroot,'packages',pkg)
 		localScripts = os.path.join(localPath,'scripts')
 		localData    = os.path.join(localPath,'data')
-	
+
 		## Get latest remote revision
 		infoList = svnclient.info2(remotePath,recurse=False)
 		for infoTuple in infoList:
@@ -644,7 +644,7 @@ class scsClient:
 		## If this is an upgrade
 		if self.packageInstalled(pkg):
 			upgrade = True
-			
+
 			## Get local revision installed
 			localRevision = int(meta.data['packages'][pkg]['revision'])
 
@@ -654,7 +654,7 @@ class scsClient:
 				return (1,"Package '" + pkg + "' is currently suspended: " + meta.data['packages'][pkg]['suspend_reason'])
 
 			## Are we already up to date?
-			if localRevision == latestRevision.number:
+			if localRevision >= latestRevision.number:
 				inform.info('Package ' + pkg + ' up to date (revision ' + str(localRevision) + ')')
 				return (0,None)
 			else:
