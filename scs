@@ -298,6 +298,8 @@ def main():
 			pkg = args[1]
 			if client.packageInstalled(pkg):
 				client.uninitPkg(pkg)
+			else:
+				inform.fatal('That package is not installed.')
 
 ################################################################################
 
