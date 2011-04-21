@@ -30,7 +30,7 @@ import pysvn
 ################################################################################
 
 def version():
-	return 39
+	return 40
 	
 def versionStr():
 	return str(version())
@@ -185,9 +185,9 @@ def sLoadConfig(configFile):
 		if os.path.isdir(configValue):
 			conf['dataroot'] = os.path.join(configValue,'server')
 			if not os.path.isdir(conf['dataroot']):
-				inform.fatal('The directory ' + filepath + ' is not a directory or does not exist!')
+				inform.fatal('The directory ' + conf['dataroot'] + ' is not a directory or does not exist!')
 		else:
-			inform.fatal('The data root specified in ' + filepath + ' is not a directory')			
+			inform.fatal('The data root specified in ' + configFile + ' is not a directory')			
 			
 	if config.has_option('server','svn user'):
 		conf['svnuser'] = config.get('server','svn user')
