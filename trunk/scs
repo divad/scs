@@ -139,7 +139,7 @@ def main():
 						latestRevision = infoDict['rev']
 						
 					if data.has_key('name') and data.has_key('desc'):
-						print str(data['name']) + '-r' + str(latestRevision.number) + ' - ' str(data['desc'])
+						print str(data['name']) + '-r' + str(latestRevision.number) + ' - ' + str(data['desc'])
 					elif data.has_key('name'):
 						print str(data['name']) + '-r' + str(latestRevision.number) + ' - No description available'
 					else:
