@@ -139,17 +139,15 @@ def main():
 						latestRevision = infoDict['rev']
 						
 					if data.has_key('name') and data.has_key('desc'):
-						output += "{0:14}  {1:8}  {2:44}\n".format(str(data['name']), str(latestRevision.number), str(data['desc']))
+						print str(data['name']) + '-r' + str(latestRevision.number) + ' - ' str(data['desc'])
 					elif data.has_key('name'):
-						output += "{0:14}  {1:8}  {2:44}\n".format(str(data['name']), str(latestRevision.number), 'N/A')
+						print str(data['name']) + '-r' + str(latestRevision.number) + ' - No description available'
 					else:
 						inform.fatal('Unable to understand data: ' + str(e))
 				else:
 					inform.fatal('Unable to understand data: ' + str(e))
 
 			if len(output) > 0:
-				print "{0:14}  {1:8}  {2:44}".format('PACKAGE NAME','REVISION','DESCRIPTION')
-				print "{0:14}  {1:8}  {2:44}".format('------------','--------','-----------')
 				sys.stdout.write(output)
 
 ################################################################################
