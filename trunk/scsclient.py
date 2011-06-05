@@ -485,11 +485,12 @@ class scsClient:
 				if 'action' in properties:
 					action = properties['action']
 
-				## Deal with immutability
-				# if file exists, and isn't a symbolic link....
+				## Deal with immutability - i.e. remove it!
+				### if destination file exists, and isn't a symbolic link then remove immutable flag
 				if os.path.exists(dest):
-					if not os.path.islink(dest):				
+					if not os.path.islink(dest):
 						if scslib.isFileImmutable(dest):
+							## Remove immutable flag
 							chattr = subprocess.Popen(['chattr', '-i', dest],stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 							(stdoutdata, stderrdata) = chattr.communicate()
 							retcode = chattr.returncode
@@ -497,8 +498,18 @@ class scsClient:
 							if retcode > 0:
 								inform.debug('Unable to remove immutable flag from ' + dest)
 
+				## Store "actionpath" - the path to which later properties apply
+				### when the action is copy then the actionpath is the "dest" property
+				### when the action is link* then the actionpath is the "source" file path
+				# default to source, because its only dest when in copy.
+				actionpath = source
+
+				## COPY THE SOURCE TO THE DEST
 				if action == 'copy':
+					actionpath = dest
+
 					try:
+						## TODO what to do if it already exists?!
 						shutil.copyfile(source,dest)
 					except IOError as e:
 						inform.error("Unable to copy from " + source + " to " + dest + ": " + str(e))
@@ -531,10 +542,13 @@ class scsClient:
 						inform.error("Unable to linko " + source + " to " + dest + ": " + str(e))
 						faultOccured = True
 
+			## THE "CHMOD", "OWNER", "GROUP", "UID" and "GID" properties apply to
+			## the "actionpath" variable which differs based on the type of "action"
+
 			## chmod - set the permissions to octal mode
 			if 'chmod' in properties:
 				try:
-					os.chmod(dest,int(properties['chmod'],8))
+					os.chmod(actionpath,int(properties['chmod'],8))
 				except Exception as e:
 					inform.error('Could not apply chmod property to ' + dest + ': ' + str(e))	
 					faultOccured = True
@@ -544,7 +558,7 @@ class scsClient:
 				try:
 					pwdid = pwd.getpwnam(properties['owner'])
 					uid = pwdid[2]
-					os.chown(dest,uid,-1)
+					os.chown(actionpath,uid,-1)
 				except Exception as e:
 					inform.error('Could not apply owner property to ' + dest + ': ' + str(e))
 					faultOccured = True
@@ -554,14 +568,14 @@ class scsClient:
 				try:
 					grpid = grp.getgrnam(properties['group'])
 					gid = grpid[2]
-					os.chown(dest,-1,gid)
+					os.chown(actionpath,-1,gid)
 				except Exception as e:
 					inform.error('Could not apply group property to ' + dest + ': ' + str(e))
 					faultOccured = True
 
 			if 'uid' in properties:
 				try:
-					os.chown(dest,properties['uid'],-1)
+					os.chown(actionpath,properties['uid'],-1)
 				except Exception as e:
 					inform.error('Could not apply uid property to ' + dest + ': ' + str(e))
 					faultOccured = True
@@ -569,7 +583,7 @@ class scsClient:
 			## group - set the group to
 			if 'gid' in properties:
 				try:
-					os.chown(dest,-1,properties['gid'])
+					os.chown(actionpath,-1,properties['gid'])
 				except Exception as e:
 					inform.error('Could not apply gid property to ' + dest + ': ' + str(e))
 					faultOccured = True
