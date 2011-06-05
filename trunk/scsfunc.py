@@ -7,11 +7,11 @@ class ScsFunc(func_module.FuncModule):
 	api_version = "0.0.1"
 	description = "SCS integration into the Fedora Unified Network Controller - Func"
 
-	def self.echo(self):
+	def echo(self):
 		pass
 
-	def self.time(self):
+	def time(self):
 		pass
 
-	def self.add(self, number1, number2):
+	def add(self, number1, number2):
 		return number1 + number2
