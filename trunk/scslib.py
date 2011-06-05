@@ -30,7 +30,7 @@ import pysvn
 ################################################################################
 
 def version():
-	return 42
+	return 43
 	
 def versionStr():
 	return str(version())
