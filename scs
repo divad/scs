@@ -235,7 +235,7 @@ def main():
 			for pkg in meta.data['packages']:
 				inform.debug('Forcing package data processing on "' + pkg + '"',log=True)
 				dataPath = os.path.join(client.dataroot,'packages',pkg,'data')			
-				client.installPackageData(dataPath)		
+				client.installPackageData(dataPath)	
 
 ################################################################################
 

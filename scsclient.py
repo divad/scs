@@ -455,10 +455,20 @@ class scsClient:
 	################################################################################		
 		
 	def installPackageData(self,localDataPath,ignoreList=[]):
-		## Did a fault occur during property application?
-		faultOccured = False
+		"""Install the package data as described via Subversion properties in the package.
 
-		## Get properties
+		Takes two arguments. The first is a string, the path of the "data" folder
+		which has been checked out from subversion. The second is a list of strings, each
+		of which is a path (installation path) which should be skipped from being installed.
+
+		The function will apply properties for each file found in the "data" folder of
+		the package. If errors are found the package then an error is returned and the
+		entire package install/upgrade should be aborted. The only exceptions to this
+		are when a file is skipped due to being in the ignore list OR if the destination
+		of a file already exists and the "ifexists" propery is set to "skip".
+		"""
+
+		## Get properties from the local data path
 		fileList = svnclient.proplist(localDataPath,recurse=True)
 
 		## For each file...
@@ -471,10 +481,7 @@ class scsClient:
 				inform.debug('Skipping file ' + source + ' from inst stage due to local changes')
 				continue;
 
-			## By default, apply properties to the source file in /opt/scs/packages/<pkg/data/
-			dest = source
-
-			## If there is a 'dest' property
+			## If there is a 'dest' property...
 			if 'dest' in properties:
 				dest = properties['dest']
 			
@@ -490,103 +497,136 @@ class scsClient:
 				if os.path.exists(dest):
 					if not os.path.islink(dest):
 						if scslib.isFileImmutable(dest):
+
 							## Remove immutable flag
 							chattr = subprocess.Popen(['chattr', '-i', dest],stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 							(stdoutdata, stderrdata) = chattr.communicate()
 							retcode = chattr.returncode
 
+							## If the command failed
 							if retcode > 0:
 								inform.debug('Unable to remove immutable flag from ' + dest)
+								## return an error
+								return True
 
-				## Store "actionpath" - the path to which later properties apply
-				### when the action is copy then the actionpath is the "dest" property
-				### when the action is link* then the actionpath is the "source" file path
-				# default to source, because its only dest when in copy.
-				actionpath = source
+
+				## Determine the source file type
+				if os.path.isfile(source):
+					pathtype = 'file'
+				elif os.path.isdir(source):
+					pathtype = 'dir'
+				else:
+					inform.error("Source file - " + source + " - is not a file or directory.")
+					## return an error
+					return True
+
+				## Does the destination exist?
+				if os.path.lexists(dest):
+					inform.warn("Installing file from '" + source + "' to '" + dest + "': Destination already exists")
+
+					## If the destination is a directory then immediatley fail
+					if os.path.isdir(dest):
+						inform.error("Cannot install file - existing destination is a directory")
+						return True
+					
+					## Otherwise determine what we should do			
+
+					## Yes, it exists
+					# default action is to generate an error and back out
+					ifexists = 'error'
+
+					## Load a user-defined 
+					if 'ifexists' in properties:
+						ifexists = properties['ifexists']
+
+					## Determine what to do based on "ifexists"
+					if ifexists == 'skip':
+						inform.error("Skipping installation as per configuration of file")
+						continue;
+
+					elif ifexists == 'delete':
+						## Try to delete the file first
+						inform.warn("Deleting existing file")
+
+						try:
+							os.unlink(dest)
+						except (IOError, OSError) as e:
+							inform.error("Unable to delet existing file '" + dest + "': " + str(e))
+							return True
+						
+					else:
+						inform.error("Cannot install file")
+						return True			
+
+				## What is the target file? If copying its the "dest" property, otherwise its the "source" (cos it'll be a symlink or no action)
+				target = source
 
 				## COPY THE SOURCE TO THE DEST
 				if action == 'copy':
-					actionpath = dest
+					target = dest
 
-					try:
-						## TODO what to do if it already exists?!
-						shutil.copyfile(source,dest)
-					except IOError as e:
-						inform.error("Unable to copy from " + source + " to " + dest + ": " + str(e))
-						faultOccured = True
+					if pathtype == 'file':
+						try:
+							shutil.copyfile(source,dest)
+						except IOError as e:
+							inform.error("Unable to copy from " + source + " to " + dest + ": " + str(e))
+							return True
+					else:
+						inform.error("Unable to copy from " + source + " to " + dest + ": Source is not a file")
+						return True
 
 				elif action == 'link':
 					try:
 						os.symlink(source,dest)
 					except (IOError, OSError) as e:
 						inform.error("Unable to link " + source + " to " + dest + ": " + str(e))
-						faultOccured = True
-
-				elif action == 'linkr':
-					try:
-						if os.path.isdir(dest):
-							shutil.rmtree(dest)
-						elif os.path.isfile(dest):
-							os.unlink(dest)
-						os.symlink(source,dest)
-					except (IOError, OSError) as e:
-						inform.error("Unable to linkr " + source + " to " + dest + ": " + str(e))
-						faultOccured = True
-
-				elif action == 'linko':
-					try:
-						if os.path.isfile(dest):
-							os.unlink(dest)
-						os.symlink(source,dest)
-					except (IOError, OSError) as e:
-						inform.error("Unable to linko " + source + " to " + dest + ": " + str(e))
-						faultOccured = True
+						return True
 
 			## THE "CHMOD", "OWNER", "GROUP", "UID" and "GID" properties apply to
-			## the "actionpath" variable which differs based on the type of "action"
+			## the "target" variable which differs based on the type of "action" (or not action)
 
 			## chmod - set the permissions to octal mode
 			if 'chmod' in properties:
 				try:
-					os.chmod(actionpath,int(properties['chmod'],8))
+					os.chmod(target,int(properties['chmod'],8))
 				except Exception as e:
 					inform.error('Could not apply chmod property to ' + dest + ': ' + str(e))	
-					faultOccured = True
+					return True
 
 			## owner - set the owner to
 			if 'owner' in properties:
 				try:
 					pwdid = pwd.getpwnam(properties['owner'])
 					uid = pwdid[2]
-					os.chown(actionpath,uid,-1)
+					os.chown(target,uid,-1)
 				except Exception as e:
 					inform.error('Could not apply owner property to ' + dest + ': ' + str(e))
-					faultOccured = True
+					return True
 
 			## group - set the group to
 			if 'group' in properties:
 				try:
 					grpid = grp.getgrnam(properties['group'])
 					gid = grpid[2]
-					os.chown(actionpath,-1,gid)
+					os.chown(target,-1,gid)
 				except Exception as e:
 					inform.error('Could not apply group property to ' + dest + ': ' + str(e))
-					faultOccured = True
+					return True
 
 			if 'uid' in properties:
 				try:
-					os.chown(actionpath,properties['uid'],-1)
+					os.chown(target,properties['uid'],-1)
 				except Exception as e:
 					inform.error('Could not apply uid property to ' + dest + ': ' + str(e))
-					faultOccured = True
+					return True
 
 			## group - set the group to
 			if 'gid' in properties:
 				try:
-					os.chown(actionpath,-1,properties['gid'])
+					os.chown(target,-1,properties['gid'])
 				except Exception as e:
 					inform.error('Could not apply gid property to ' + dest + ': ' + str(e))
-					faultOccured = True
+					return True
 
 			## immutable - set the file to immutable after
 			if 'immutable' in properties:
@@ -600,13 +640,14 @@ class scsClient:
 
 					if retcode > 0:
 						inform.error(stdoutdata)
-						faultOccured = True
+						return True
 					
 				else:
 					inform.warn('Not applying immutable attribute to symlink - not possible')
 				
-				
-		return faultOccured
+		
+		## Return false, no error occured
+		return False
 
 	################################################################################
 	################################################################################
@@ -614,7 +655,7 @@ class scsClient:
 	# Returns 0 if it was init'ed
 	# Returns 1 if it wasn't
 	# Returns 2 if it was, but failures occured and the package is now suspended
-	# Returns a string or None, if 1/2 its a string saying why, useful for logging or whatever
+	# Returns a string or None, if error is 1/2 its a string saying why, useful for logging or whatever
 
 	def initPkg(self,pkg,rev=-1,ignore=False):
 		## See if the package requested actually exists
@@ -746,19 +787,22 @@ class scsClient:
 	
 		if faultOccured:
 			faultMsg = 'A fault occured during applying package data properties'
-	
-		if self.runScript(pkg,'postinst'):
-			faultMsg = 'The postinst script returned an error'
-			faultOccured = True
-
-		if upgrade:
-			if self.runScript(pkg,'postup'):
-				faultMsg = 'The postup script returned an error'
-				faultOccured = True
 		else:
-			if self.runScript(pkg,'postinit'):
-				faultMsg = 'The postinit script returned an error'
+
+			## Success! Run the post scripts
+
+			if self.runScript(pkg,'postinst'):
+				faultMsg = 'The postinst script returned an error'
 				faultOccured = True
+
+			if upgrade:
+				if self.runScript(pkg,'postup'):
+					faultMsg = 'The postup script returned an error'
+					faultOccured = True
+			else:
+				if self.runScript(pkg,'postinit'):
+					faultMsg = 'The postinit script returned an error'
+					faultOccured = True
 
 		## Output some info
 		inform.info('Package ' + pkg + ' now at revision ' + str(revisionToUse.number),log=True)
@@ -769,11 +813,12 @@ class scsClient:
 		if faultOccured:
 			self.suspendPackage(pkg,faultMsg)
 			inform.error('An error occured during the init process. The package "' + pkg + '" is now suspended')
+			inform.error('If this is an error you believe can fix locally then fix it. Then run "scs resume ' + pkg + '" then "scs force ' + pkg + '" to try again') 
 			return (2,'An error occured during the init process. The package "' + pkg + '" is now suspended')
 		else:
 			## Recursive call package if we're not at the latest now
 			if revisionToUse.number < latestRevision.number:
-				return self.initPkg(pkg)	
+				return self.initPkg(pkg)
 			else:
 				inform.info('Package ' + pkg + ' is now up to date',log=True)
 				return (0,None)
