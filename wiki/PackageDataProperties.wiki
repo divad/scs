@@ -8,6 +8,10 @@ The core function of SCS is to install configuration files (or other files) and 
 
 Inside the "data" directory of an SCS package the package designer/creator will place files and directories and then mark each file or directory with "properties" to let SCS know what to do with them. SCS packages are at their most basic level Subversion repositories, so the Subversion properties feature is used to add the SCS metadata or properties to each file within "data".
 
+Upon an installation of an SCS package (or an upgrade) SCS will "install" the package data. It does this by looking at each file in turn and reading the Subversion properties set against it. These tell SCS what to then do with the file.
+
+
+
 == dest ==
 
 == check ==
