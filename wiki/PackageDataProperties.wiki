@@ -16,21 +16,33 @@ Upon an installation of an SCS package (or an upgrade) SCS will "install" the pa
 
 == action ==
 
+When the "dest" property is set (See below) then SCS needs to know what you'd like to do with the file. 
+
+The "action" property defaults to the value "copy" if the "dest" property is set.
+
 === copy ===
 
-Copy the file to the location specified by "dest"
+Copy the file to the location specified by the "dest" property.
+
+Copy can only apply to files, it is ignored when set against directories.
 
 === link ===
 
-Link the file to the location specified by "dest"
+Link to the file from the location specified by "dest" property.
+
+The file remains in (by default) /opt/scs/client/packages/<name>/data/<file> but a symbolic link is created at "dest" linked to the file.
 
 ----
 
 == dest ==
 
+This is an optional property. When not set then no copying or linking takes place. If set then the "dest" property is used by the process specified by the "action" property, see above. 
+
 ----
 
 == ifexists ==
+
+When copying or linking the path specified by the "dest" property might already exist. In this case the "ifexists" property is consulted on what to do. If that property is unset then "
 
 ----
 
