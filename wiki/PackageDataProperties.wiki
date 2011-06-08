@@ -8,11 +8,23 @@ Inside the "data" directory of an SCS package the package designer/creator will 
 
 Upon an installation of an SCS package (or an upgrade) SCS will "install" the package data. It does this by looking at each file in turn and reading the Subversion properties set against it. These tell SCS what to then do with the file.
 
+<h2>List of properties:</h2>
+
 <wiki:toc max_depth="2" />
 
+== action ==
 
+=== copy ===
+
+Copy the file to the location specified by "dest"
+
+=== link ===
+
+Link the file to the location specified by "dest"
 
 == dest ==
+
+== ifexists ==
 
 == check ==
 
@@ -35,24 +47,6 @@ The package revision upgrade does not take place, instead the whole package will
 === skip ===
 
 The package is still upgraded but this file is skipped from the upgrade process altogether. This is not recommended but in certain cases this might be useful.
-
-== action ==
-
-=== copy ===
-
-Copy the file to the location specified by "dest"
-
-=== link ===
-
-Link the file to the location specified by "dest"
-
-=== linkr ===
-
-Link the file, overwriting (recursively if its a directory) if it exists, to the location specified by "dest".
-
-=== linko ===
-
-Link the file, overwriting if it exists, to the location specified by "dest".
 
 == chmod ==
 
