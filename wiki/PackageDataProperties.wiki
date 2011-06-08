@@ -1,6 +1,6 @@
 #summary Documentation for every property that can be set against package data
 
-<h1>Overview</h1>
+<h1>SCS Package Data Properties</h1>
 
 The core function of SCS is to install configuration files (or other files) and to deal with local changes (in a way defined by the package creator or the system administrator). To do this SCS packages are divided into two - "scripts" and "data". Packages contain "scripts" which are run at various points (such as on upgrade of a package). Packages also have a "data" component which is what this article focuses on.
 
