@@ -813,7 +813,6 @@ class scsClient:
 		if faultOccured:
 			self.suspendPackage(pkg,faultMsg)
 			inform.error('An error occured during the init process. The package "' + pkg + '" is now suspended')
-			inform.error('If this is an error you believe can fix locally then fix it. Then run "scs resume ' + pkg + '" then "scs force ' + pkg + '" to try again') 
 			return (2,'An error occured during the init process. The package "' + pkg + '" is now suspended')
 		else:
 			## Recursive call package if we're not at the latest now
