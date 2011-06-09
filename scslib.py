@@ -20,6 +20,7 @@ import errno
 import pwd
 import grp
 import pysvn
+import stat
 
 ## functions starting with lowercase 's' are for the server component only
 ## functions starting with lowercase 'c' are for the client component only
@@ -30,7 +31,7 @@ import pysvn
 ################################################################################
 
 def version():
-	return 45
+	return 46
 	
 def versionStr():
 	return str(version())
