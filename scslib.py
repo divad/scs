@@ -30,7 +30,7 @@ import pysvn
 ################################################################################
 
 def version():
-	return 43
+	return 45
 	
 def versionStr():
 	return str(version())
@@ -257,7 +257,18 @@ def sCreateSVN(path,name,conf):
 	## Handle errors
 	if svnadmin.returncode > 0:
 		inform.fatal(stdoutdata)
-		
+
+	## Unlock revprops (For some odd reason they're turned off by default. Thanks Subversion)
+	try:
+		hookfile = os.path.join(path,'hooks','pre-revprop-change')
+		hook = open(hookfile,'w')
+		hook.write("#!/bin/sh\n")
+		hook.write("exit 0\n")
+		hook.close()
+		os.chmod(hookfile,stat.S_IRWXU)
+	except (OSError, IOError) as error:
+		inform.fatal('Unable to enable revision properties: ' + error.strerror + ' on ' + error.filename)	
+
 	## Fix perms
 	fixPerms(path,conf)
 	
