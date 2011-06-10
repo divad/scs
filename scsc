@@ -151,9 +151,15 @@ def main():
 			inform.fatal("That channel does not exist")
 		else:
 			## Get latest channel revision
-			infoList = svnclient.info2(channelCheckout,recurse=False,revision=pysvn.Revision(pysvn.opt_revision_kind.head))
-			currentChannelRevision = infoList[0][1].rev.number
-			print str(currentChannelRevision)
+			#infoList = svnclient.info2(channelCheckout,recurse=False,revision=pysvn.Revision(pysvn.opt_revision_kind.head))
+			#currentChannelRevision = infoList[0][1].rev.number
+			#print str(currentChannelRevision)
+
+			logs = svnclient.log(channelCheckout)
+			for log in logs:
+				msg = log["message"]
+				rev = log["revision"]
+				print str(rev.number) + " " + msg
 
 	#### CHANNEL TAG #######################################################
 	elif action == 'tag' and len(args) == 3:
