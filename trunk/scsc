@@ -148,13 +148,14 @@ def main():
 	elif action == 'skip' and len(args) == 3:
 		channelName = args[1]
 		revision = int(args[2])
-		channelCheckout = os.path.join(chancodir,channelName)		
+		svnpath = os.path.join(conf['svnroot'],name)
+		channelUrl = 'file://' + svnpath
 
 		if not meta.data['channels'].has_key(channelName):
 			inform.fatal("That channel does not exist")
 		else:
 			## Get latest channel revision
-			infoList = svnclient.info2(channelCheckout,recurse=False,revision=pysvn.Revision(pysvn.opt_revision_kind.head))
+			infoList = svnclient.info2(channelUrl,recurse=False,revision=pysvn.Revision(pysvn.opt_revision_kind.head))
 			currentChannelRevision = infoList[0][1].rev.number
 			#print str(currentChannelRevision)
 
@@ -165,8 +166,12 @@ def main():
 				inform.fatal("You cannot skip the current revision!")
 
 			try:
-				## Mark the revision as BAD! To be skipped.
-				svnclient.revpropset('skip','yes',channelCheckout,revision=pysvn.Revision(pysvn.opt_revision_kind.number,revision))
+				## Mark the revision as BAD! To be skipped. Why the hell does the command line client let you do this via a checkout, but the API only via the URL?!
+				svnclient.revpropset('skip','yes',channelUrl,revision=pysvn.Revision(pysvn.opt_revision_kind.number,revision))
+
+				## Fix permissions if needed
+				scslib.fixPerms(path,conf)
+
 			except pysvn.ClientError as error:
 				inform.fatal('Subversion operation failed: ' + str(error))
 
