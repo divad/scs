@@ -143,6 +143,18 @@ def main():
 	elif action == 'list':
 		scslib.listChannels(meta.data)
 
+	elif action == 'history' and len(args) == 2:
+		channelName = args[1]
+		channelCheckout = os.path.join(chancodir,channelName)		
+
+		if not meta.data['channels'].has_key(channelName):
+			inform.fatal("That channel does not exist")
+		else:
+			## Get latest channel revision
+			infoList = svnclient.info2(channelName,recurse=False,revision=pysvn.Revision(pysvn.opt_revision_kind.head))
+			currentChannelRevision = infoList[0][1].rev.number
+			print str(currentChannelRevision)
+
 	#### CHANNEL TAG #######################################################
 	elif action == 'tag' and len(args) == 3:
 	
@@ -309,7 +321,7 @@ def main():
 			svnclient.propset('order',str(installOrder),pkgConfigFile)
 
 			## Checkin
-			revision = svnclient.checkin(channelCheckout,"Removed " + packageName + ' from channel ' + channelName,recurse=True)
+			revision = svnclient.checkin(channelCheckout,"Set the install order of " + packageName + ' to ' + str(installOrder),recurse=True)
 			
 			## Fix perms
 			scslib.fixPerms(channelSvnPath,conf)
