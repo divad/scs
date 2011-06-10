@@ -183,16 +183,16 @@ def main():
 		if not meta.data['channels'].has_key(channelName):
 			inform.fatal("That channel does not exist")
 		else:
-			## Get latest channel revision
-			#infoList = svnclient.info2(channelCheckout,recurse=False,revision=pysvn.Revision(pysvn.opt_revision_kind.head))
-			#currentChannelRevision = infoList[0][1].rev.number
-			#print str(currentChannelRevision)
-
 			logs = svnclient.log(channelCheckout,revision_end=pysvn.Revision( pysvn.opt_revision_kind.head ), revision_start=pysvn.Revision( pysvn.opt_revision_kind.number, 0 ))
 			for log in logs:
 				msg = log["message"]
 				rev = log["revision"]
-				print str(rev.number) + " " + msg
+				revprops = log["revprops"]
+
+				if 'skip' in revprops:
+					print str(rev.number) + " " + msg + " (Skipped)"
+				else:
+					print str(rev.number) + " " + msg
 
 	#### CHANNEL TAG #######################################################
 	elif action == 'tag' and len(args) == 3:
