@@ -148,7 +148,7 @@ def main():
 	elif action == 'skip' and len(args) == 3:
 		channelName = args[1]
 		revision = int(args[2])
-		svnpath = os.path.join(conf['svnroot'],name)
+		svnpath = os.path.join(conf['svnroot'],channelName)
 		channelUrl = 'file://' + svnpath
 
 		if not meta.data['channels'].has_key(channelName):
