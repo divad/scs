@@ -151,7 +151,7 @@ def main():
 			inform.fatal("That channel does not exist")
 		else:
 			## Get latest channel revision
-			infoList = svnclient.info2(channelName,recurse=False,revision=pysvn.Revision(pysvn.opt_revision_kind.head))
+			infoList = svnclient.info2(channelCheckout,recurse=False,revision=pysvn.Revision(pysvn.opt_revision_kind.head))
 			currentChannelRevision = infoList[0][1].rev.number
 			print str(currentChannelRevision)
 
