@@ -155,7 +155,7 @@ def main():
 			#currentChannelRevision = infoList[0][1].rev.number
 			#print str(currentChannelRevision)
 
-			logs = svnclient.log(channelCheckout,revision_end=pysvn.Revision( opt_revision_kind.head ), revision_start=pysvn.Revision( opt_revision_kind.number, 0 ))
+			logs = svnclient.log(channelCheckout,revision_end=pysvn.Revision( pysvn.opt_revision_kind.head ), revision_start=pysvn.Revision( pysvn.opt_revision_kind.number, 0 ))
 			for log in logs:
 				msg = log["message"]
 				rev = log["revision"]
