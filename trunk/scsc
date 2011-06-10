@@ -144,6 +144,32 @@ def main():
 	elif action == 'list':
 		scslib.listChannels(meta.data)
 
+	#### CHANNEL REVISION SKIP #############################################
+	elif action == 'skip' and len(args) == 3:
+		channelName = args[1]
+		revision = int(args[2])
+		channelCheckout = os.path.join(chancodir,channelName)		
+
+		if not meta.data['channels'].has_key(channelName):
+			inform.fatal("That channel does not exist")
+		else:
+			## Get latest channel revision
+			infoList = svnclient.info2(channelCheckout,recurse=False,revision=pysvn.Revision(pysvn.opt_revision_kind.head))
+			currentChannelRevision = infoList[0][1].rev.number
+			#print str(currentChannelRevision)
+
+			if revision > currentChannelRevision:
+				inform.fatal("Invalid revision")
+
+			if revision == currentChannelRevision:
+				inform.fatal("You cannot skip the current revision!")
+
+			try:
+				## Mark the revision as BAD! To be skipped.
+				svnclient.revpropset('skip','yes',channelCheckout,revision=pysvn.Revision(pysvn.opt_revision_kind.number,revision))
+			except pysvn.ClientError as error:
+				inform.fatal('Subversion operation failed: ' + str(error))
+
 	#### CHANNEL HISTORY ###################################################
 	elif action == 'history' and len(args) == 2:
 		channelName = args[1]
@@ -336,6 +362,8 @@ def main():
 
 		except pysvn.ClientError as error:
 			inform.fatal('Subversion operation failed: ' + str(error))
+
+	############################################################################
 
 	elif action == 'info' and len(args) == 2:
 		channelName     = args[1]
