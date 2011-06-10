@@ -170,7 +170,7 @@ def main():
 				svnclient.revpropset('skip','yes',channelUrl,revision=pysvn.Revision(pysvn.opt_revision_kind.number,revision))
 
 				## Fix permissions if needed
-				scslib.fixPerms(path,conf)
+				scslib.fixPerms(svnpath,conf)
 
 			except pysvn.ClientError as error:
 				inform.fatal('Subversion operation failed: ' + str(error))
