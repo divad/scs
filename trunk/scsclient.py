@@ -532,8 +532,9 @@ class scsClient:
 					## Otherwise determine what we should do			
 
 					## Yes, it exists
-					# default action is to generate an error and back out
-					ifexists = 'error'
+					# default action is to delete the file
+					# because this is the action SCS has always taken
+					ifexists = 'delete'
 
 					## Load a user-defined 
 					if 'ifexists' in properties:
@@ -551,7 +552,7 @@ class scsClient:
 						try:
 							os.unlink(dest)
 						except (IOError, OSError) as e:
-							inform.error("Unable to delet existing file '" + dest + "': " + str(e))
+							inform.error("Unable to delete existing file '" + dest + "': " + str(e))
 							return True
 						
 					else:
