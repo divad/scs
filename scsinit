@@ -20,6 +20,9 @@ def main():
 	parser.add_option('-c','--config-file',dest='config',default="/etc/scs.conf",help='Set the configuration file to use (Optional)')	
 	parser.add_option('-u','--username',dest='username',default=None,help='The HTTP username when using a http svn url (Optional)')	
 	parser.add_option('-p','--password',dest='password',default=None,help='The HTTP password when using a http svn url (Optional)')
+	parser.add_option('-a','--mailaddr',dest='mailaddr',default=None,help='Address to send alert e-mails to (Optional)')
+	parser.add_option('-r','--smtprelay',dest='smtprelay',default=None,help='SMTP server, if not set defaults to localhost (Optional)')
+
 	(options, args) = parser.parse_args()
 	
 	if options.svn == None:
@@ -45,7 +48,6 @@ def main():
 		except (OSError, IOError) as error:
 			inform.fatal('Failed to initalise the SCS client. Error was: ' + str(error))
 			
-			
 		config = ConfigParser.RawConfigParser()
 		config.add_section('client')
 		config.add_section('main')		
@@ -57,7 +59,13 @@ def main():
 			config.set('client','svn username',options.username)
 
 		if not options.password == None:
-			config.set('client','svn password',options.password)			
+			config.set('client','svn password',options.password)
+
+		if not options.mailaddr == None:
+			config.set('client','notify email',options.mailaddr)
+
+		if not options.smtprelay == None:
+			config.set('client','smtp server',options.smtprelay)
 
 		try:
 			with open(options.config,'wb') as configfile:
