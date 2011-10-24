@@ -124,7 +124,7 @@ def main():
 
 		## Record in meta.data for lating saving into metafile
 		meta.data['packages'][newname] = meta.data['packages'][oldname]
-		meta.data['packages'][newname]['name'] = newname
+		#meta.data['packages'][newname]['name'] = newname
 			
 		## Other options
 		if options.stepfree:
