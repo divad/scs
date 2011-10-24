@@ -12,19 +12,24 @@ import scsclient
 from scsclient import client
 from scslib import inform, meta, svnclient
 
-# TODO
-# take backup of existing files when init'ing or when local changes found
-# check when deleting things like pkgs on client and server if the package is 
-# needed by a channel (client) or is in a channel (server).
-# non-transactional packages
-
-## Questions:
+## QUESTIONS:
+# should a backup be taken of existing files when init'ing or when local changes are found?
 # check is taken from /PREVIOUS/ revision...is that a good thing?
+# Add ability for revisions to be skipped or marked as test revisions???
+### package wise, revprops? 
+### channel wise, revprops?
 
-#### ROADMAP (Future versions)
-# Add "pkg-info" command to print package info on server
-# Add "chan-info" command to print channel info on server
-# Add ability for revisions to be skipped or marked as test revisions?
+## FIXES:
+# unbuffered output
+# scsp clone should by default copy the description too, why not?!
+# scsc tag as /dev/, or "mark" as normal. 
+# check when deleting things like pkgs on client and server if the package is needed by a channel (client) or is in a channel (server).
+
+## FUTURE FEATURES:
+# non-transactional packages
+# Add "pkg-info" command to print package info on server (this command is run on client)
+# Add "chan-info" command to print channel info on server (this command is run on client)
+# non-transactional packages
 # Default action when local changes found should be via a pkgset thing
 
 ################################################################################
