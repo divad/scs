@@ -31,7 +31,7 @@ import stat
 ################################################################################
 
 def version():
-	return 48
+	return 49
 	
 def versionStr():
 	return str(version())
