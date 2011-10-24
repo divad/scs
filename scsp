@@ -10,6 +10,7 @@ import sys
 import shutil
 import pysvn
 import atexit
+import copy
 
 def main():
 	## Require root
@@ -123,8 +124,7 @@ def main():
 		scslib.sCloneSVN(oldsvnpath,newsvnpath,newname,conf)
 
 		## Record in meta.data for lating saving into metafile
-		meta.data['packages'][newname] = meta.data['packages'][oldname]
-		inform.warn(meta.data['packages'][oldname])
+		meta.data['packages'][newname] = copy.deepcopy(meta.data['packages'][oldname])
 		meta.data['packages'][newname]['name'] = newname
 			
 		## Other options
