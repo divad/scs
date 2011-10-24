@@ -135,9 +135,6 @@ def main():
 				
 		if not options.desc == None:
 			meta.data['packages'][newname]['desc'] = options.desc
-		## Removed "cloned from" nonsense, its not helpful!
-		#else:
-			#meta.data['packages'][newname]['desc'] = 'Cloned from package ' + oldname
 		
 	#### PACKAGE SET #######################################################
 	elif action == 'set' and len(args) == 4:
