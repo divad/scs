@@ -20,7 +20,6 @@ from scslib import inform, meta, svnclient
 ### channel wise, revprops?
 
 ## FIXES:
-# unbuffered output
 # scsp clone should by default copy the description too, why not?!
 # scsc tag as /dev/, or "mark" as normal. 
 # check when deleting things like pkgs on client and server if the package is needed by a channel (client) or is in a channel (server).

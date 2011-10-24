@@ -1,5 +1,6 @@
 #!/usr/bin/python -u
-# Subversion Configuration System Manager
+# Subversion Configuration System 
+# Channel Manager
 
 #### IMPORTS
 import scslib
