@@ -110,19 +110,21 @@ def main():
 		oldsvnpath = os.path.join(conf['svnroot'],oldname)
 		newsvnpath = os.path.join(conf['svnroot'],newname)
 		
+		## Check the existing package exists first
 		if not meta.data['packages'].has_key(oldname):
 			inform.fatal("That package does not exist")		
 
 		## the name must be unique across packages and channels
+		## check to make sure the new package name isn't already in use
 		if meta.data['channels'].has_key(newname) or meta.data['packages'].has_key(newname):
 			inform.fatal("That name is already in use")
 
-		## Clone the SVN
+		## Clone the SVN tree
 		scslib.sCloneSVN(oldsvnpath,newsvnpath,newname,conf)
 
 		## Record in meta.data for lating saving into metafile
 		meta.data['packages'][newname] = meta.data['packages'][oldname]
-		meta.data['packages'][newname] = {'name': newname}
+		meta.data['packages'][newname]['name'] = newname
 			
 		## Other options
 		if options.stepfree:
@@ -132,8 +134,9 @@ def main():
 				
 		if not options.desc == None:
 			meta.data['packages'][newname]['desc'] = options.desc
-		else:
-			meta.data['packages'][newname]['desc'] = 'Cloned from package ' + oldname
+		## Removed "cloned from" nonsense, its not helpful!
+		#else:
+			#meta.data['packages'][newname]['desc'] = 'Cloned from package ' + oldname
 		
 	#### PACKAGE SET #######################################################
 	elif action == 'set' and len(args) == 4:
