@@ -364,8 +364,8 @@ class scsClient:
 			# Def Local checkout of the channel
 			localPath   = os.path.join(self.dataroot,'channels',channel)
 
-			# Def Upgrade file within channel
-			upgradeFile = os.path.join(localPath,'upgrade')
+			# Def Local checked out list of packages for the channel
+			localPkgs   = os.path.join(localPath,'packages')
 
 			## Get the latest revision of the channel
 			infoList = svnclient.info2(remotePath,recurse=False)
@@ -393,8 +393,11 @@ class scsClient:
 				inform.info('Updating channel "' + channel + '" to revision ' + str(localRevision +1))
 				revisionToUse = pysvn.Revision(pysvn.opt_revision_kind.number, localRevision + 1)
 
-			## Update the local channel checkout to the revision we're updating to
-			svnclient.update(localPath,revision=revisionToUse)
+			## Update the local channel checkout of packages
+			svnclient.update(localPkgs,revision=revisionToUse)
+
+			## Get the upgrade file so we can see its properties to determine what to init/uninit for this channel update step
+			svnclient.checkout(remotePath + 'upgrade',os.path.join(localPath,'upgrade'),recurse=False)
 
 			## Get the properties on the upgrade file
 			propList = svnclient.proplist(upgradeFile,revision=revisionToUse)
