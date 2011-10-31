@@ -1,5 +1,5 @@
 #!/usr/bin/python
-# Subversion Configuration System Manager
+# Subversion Configuration System Init program
 
 import ConfigParser
 import sys
@@ -73,7 +73,8 @@ def main():
 		except (OSError, IOError) as error:
 			inform.fatal('Failed to write to config file. Error was: ' + str(error))
 			
-		## TODO change mode to 0600
+		## Change file mode to 0600 for SECURITYZ
+		os.chmod(configfile,0600)
 	
 if __name__ == "__main__":
 	if sys.version < '2.6':
