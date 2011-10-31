@@ -30,7 +30,7 @@ class scsClient:
 	svnpass  = None
 	remoteMeta = None
 	
-	## This is bascially a constructor, except I can't call it immediatley (why?)
+	## This is bascially a constructor, except it is called after construction by a script since this object is created when this file/module is loaded
 	def loadConfig(self,filepath):
 		config = ConfigParser.RawConfigParser()
 		config.read(filepath)
@@ -356,11 +356,16 @@ class scsClient:
 	def updateChannel(self,channel):
 		inform.debug('updateChannel(' + channel + ') called')
 
+		## Check to ensure we're subscribed to the channel
 		if self.channelSubscribed(channel):
+			# Def SVN URL where channel resides
 			remotePath  = self.svnurl + channel + '/'
+
+			# Def Local checkout of the channel
 			localPath   = os.path.join(self.dataroot,'channels',channel)
-			localPkgs   = os.path.join(localPath,'packages')
-			upgradeFile = remotePath + 'upgrade'
+
+			# Def Upgrade file within channel
+			upgradeFile = os.path.join(localPath,'upgrade')
 
 			## Get the latest revision of the channel
 			infoList = svnclient.info2(remotePath,recurse=False)
@@ -373,20 +378,25 @@ class scsClient:
 			localRevision = int(meta.data['channels'][channel]['revision'])
 			inform.debug('Latest local channel revision is ' + str(localRevision))
 
-			## Decide upon which revision to go to????
+			## Are are already up do date?
 			if localRevision == latestRevision.number:
-				## Mark the channel as up to date
+				## Note that the channel as up to date
 				inform.info('Channel "' + channel + '" is up to date')
 
-				## Update child channels
+				## Update child channels, if any
 				self.updateChildChannels(channel)
+
+				## We're done, channel already up to date
 				return 0
 			else:
+				## Update to the next channel step/version
 				inform.info('Updating channel "' + channel + '" to revision ' + str(localRevision +1))
 				revisionToUse = pysvn.Revision(pysvn.opt_revision_kind.number, localRevision + 1)
 
-			## No need to download the upgrade file, we'll just read its properties from remote :)
-			## Get the properties
+			## Update the local channel checkout to the revision we're updating to
+			svnclient.update(localPath,revision=revisionToUse)
+
+			## Get the properties on the upgrade file
 			propList = svnclient.proplist(upgradeFile,revision=revisionToUse)
 
 			for propSet in propList:
@@ -398,7 +408,7 @@ class scsClient:
 						(retCode,faultMsg) = self.initPkg(properties['name'],int(properties['revision']))
 					
 						if retCode > 0:
-							inform.error("Could not init/upgrade " + properties['name'] + ". Channel could not be updated")
+							inform.error("Channel update failed: Could not init/upgrade " + properties['name'] + "")
 
 							## Alert email
 							if not self.mailaddr == None:
@@ -426,19 +436,16 @@ class scsClient:
 						result = self.uninitPkg(properties['name'])
 
 						if result == 1:
-							inform.fatal("Could not upgrade channel. Please correct the error and try to upgrade again")
+							inform.fatal("Channel update failed: Please correct the error and try to upgrade again")
 							return 1
 					
 				else:
 					inform.warn('Warning! Channel upgrade file does not have properties set against it!')
 
-			## Update package info (Although we don't actually use the info until an unsubscribe - but they are there if an admin wants them)
-			svnclient.update(localPkgs,revision=revisionToUse)
-
-			## Save new revision
+			## Mark in our metadata the new revision we're at
 			meta.data['channels'][channel]['revision'] = revisionToUse.number;
 
-			## We're upgraded
+			## We've done this step, but are they anymore to get to the latest revision?
 			if revisionToUse.number < latestRevision:
 		
 				## We need to recursive-call and upgrade again! :)
@@ -632,7 +639,8 @@ class scsClient:
 			## immutable - set the file to immutable after
 			if 'immutable' in properties:
 				## NOTE although python has os.chflags, due to a python configure bug they
-				## are NEVER compiled in - stupid python.
+				## are NEVER compiled in - stupid python. Its only fixed in Python 2.7 and 3.2
+				## until these are more widly used this code will remain.
 
 				if not os.path.islink(dest):
 					chattr = subprocess.Popen(['chattr', '+i', dest],stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
@@ -646,7 +654,6 @@ class scsClient:
 				else:
 					inform.warn('Not applying immutable attribute to symlink - not possible')
 				
-		
 		## Return false, no error occured
 		return False
 
