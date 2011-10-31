@@ -74,7 +74,7 @@ def main():
 			inform.fatal('Failed to write to config file. Error was: ' + str(error))
 			
 		## Change file mode to 0600 for SECURITYZ
-		os.chmod(configfile,0600)
+		os.chmod(options.config,0600)
 	
 if __name__ == "__main__":
 	if sys.version < '2.6':
