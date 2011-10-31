@@ -367,6 +367,9 @@ class scsClient:
 			# Def Local checked out list of packages for the channel
 			localPkgs   = os.path.join(localPath,'packages')
 
+			# Def the local upgrade file
+			upgradeFile = os.path.join(localPath,'upgrade')
+
 			## Get the latest revision of the channel
 			infoList = svnclient.info2(remotePath,recurse=False)
 			for infoTuple in infoList:
@@ -398,7 +401,8 @@ class scsClient:
 
 			## Get the upgrade file so we can see its properties to determine what to init/uninit for this channel update step
 			## recurse is false here because of an earlier coding mistake where in channelsubscribe in scs code it only checked out the packages/ sub dir
-			svnclient.checkout(remotePath,localPath,recurse=False)
+			## I hate this code - db2z07 :'(
+			svnclient.checkout(remotePath,localPath,recurse=False,revision=revisionToUse)
 
 			## Get the properties on the upgrade file
 			propList = svnclient.proplist(upgradeFile,revision=revisionToUse)
