@@ -397,7 +397,7 @@ class scsClient:
 			svnclient.update(localPkgs,revision=revisionToUse)
 
 			## Get the upgrade file so we can see its properties to determine what to init/uninit for this channel update step
-			svnclient.checkout(remotePath + 'upgrade',os.path.join(localPath,'upgrade'),recurse=False)
+			svnclient.checkout(remotePath + 'upgrade',localPath,recurse=False)
 
 			## Get the properties on the upgrade file
 			propList = svnclient.proplist(upgradeFile,revision=revisionToUse)
