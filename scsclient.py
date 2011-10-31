@@ -30,7 +30,7 @@ class scsClient:
 	svnpass  = None
 	remoteMeta = None
 	
-	## This is bascially a constructor, except it is called after construction by a script since this object is created when this file/module is loaded
+	## This is bascially a constructor, except I can't call it immediatley (why?)
 	def loadConfig(self,filepath):
 		config = ConfigParser.RawConfigParser()
 		config.read(filepath)
@@ -356,19 +356,11 @@ class scsClient:
 	def updateChannel(self,channel):
 		inform.debug('updateChannel(' + channel + ') called')
 
-		## Check to ensure we're subscribed to the channel
 		if self.channelSubscribed(channel):
-			# Def SVN URL where channel resides
 			remotePath  = self.svnurl + channel + '/'
-
-			# Def Local checkout of the channel
 			localPath   = os.path.join(self.dataroot,'channels',channel)
-
-			# Def Local checked out list of packages for the channel
 			localPkgs   = os.path.join(localPath,'packages')
-
-			# Def the local upgrade file
-			upgradeFile = os.path.join(localPath,'upgrade')
+			upgradeFile = remotePath + 'upgrade'
 
 			## Get the latest revision of the channel
 			infoList = svnclient.info2(remotePath,recurse=False)
@@ -381,30 +373,20 @@ class scsClient:
 			localRevision = int(meta.data['channels'][channel]['revision'])
 			inform.debug('Latest local channel revision is ' + str(localRevision))
 
-			## Are are already up do date?
+			## Decide upon which revision to go to????
 			if localRevision == latestRevision.number:
-				## Note that the channel as up to date
+				## Mark the channel as up to date
 				inform.info('Channel "' + channel + '" is up to date')
 
-				## Update child channels, if any
+				## Update child channels
 				self.updateChildChannels(channel)
-
-				## We're done, channel already up to date
 				return 0
 			else:
-				## Update to the next channel step/version
 				inform.info('Updating channel "' + channel + '" to revision ' + str(localRevision +1))
 				revisionToUse = pysvn.Revision(pysvn.opt_revision_kind.number, localRevision + 1)
 
-			## Update the local channel checkout of packages
-			svnclient.update(localPkgs,revision=revisionToUse)
-
-			## Get the upgrade file so we can see its properties to determine what to init/uninit for this channel update step
-			## recurse is false here because of an earlier coding mistake where in channelsubscribe in scs code it only checked out the packages/ sub dir
-			## I hate this code - db2z07 :'(
-			svnclient.checkout(remotePath,localPath,recurse=False,revision=revisionToUse)
-
-			## Get the properties on the upgrade file
+			## No need to download the upgrade file, we'll just read its properties from remote :)
+			## Get the properties
 			propList = svnclient.proplist(upgradeFile,revision=revisionToUse)
 
 			for propSet in propList:
@@ -416,7 +398,7 @@ class scsClient:
 						(retCode,faultMsg) = self.initPkg(properties['name'],int(properties['revision']))
 					
 						if retCode > 0:
-							inform.error("Channel update failed: Could not init/upgrade " + properties['name'] + "")
+							inform.error("Could not init/upgrade " + properties['name'] + ". Channel could not be updated")
 
 							## Alert email
 							if not self.mailaddr == None:
@@ -444,16 +426,19 @@ class scsClient:
 						result = self.uninitPkg(properties['name'])
 
 						if result == 1:
-							inform.fatal("Channel update failed: Please correct the error and try to upgrade again")
+							inform.fatal("Could not upgrade channel. Please correct the error and try to upgrade again")
 							return 1
 					
 				else:
 					inform.warn('Warning! Channel upgrade file does not have properties set against it!')
 
-			## Mark in our metadata the new revision we're at
+			## Update package info (Although we don't actually use the info until an unsubscribe - but they are there if an admin wants them)
+			svnclient.update(localPkgs,revision=revisionToUse)
+
+			## Save new revision
 			meta.data['channels'][channel]['revision'] = revisionToUse.number;
 
-			## We've done this step, but are they anymore to get to the latest revision?
+			## We're upgraded
 			if revisionToUse.number < latestRevision:
 		
 				## We need to recursive-call and upgrade again! :)
@@ -647,8 +632,7 @@ class scsClient:
 			## immutable - set the file to immutable after
 			if 'immutable' in properties:
 				## NOTE although python has os.chflags, due to a python configure bug they
-				## are NEVER compiled in - stupid python. Its only fixed in Python 2.7 and 3.2
-				## until these are more widly used this code will remain.
+				## are NEVER compiled in - stupid python.
 
 				if not os.path.islink(dest):
 					chattr = subprocess.Popen(['chattr', '+i', dest],stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
@@ -662,6 +646,7 @@ class scsClient:
 				else:
 					inform.warn('Not applying immutable attribute to symlink - not possible')
 				
+		
 		## Return false, no error occured
 		return False
 
