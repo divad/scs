@@ -1,0 +1,1 @@
+SCS is a configuration management system for Unix systems such as servers and workstations. SCS is a lightweight system. It enforces strong use of version control (via Subversion) and, unlike systems like CFengine and Puppet, it does not force you to write code which is idempotent - instead SCS allows you to choose between "Transactional" mode and "Idempotent" mode.
